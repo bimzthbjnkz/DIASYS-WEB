@@ -1,8 +1,15 @@
-import { fmtDate, fmtPct, fmtTime } from './format.js'
-import { synthECG } from './ecg.js'
+import { fmtDate, fmtPct, fmtTime } from './format'
+import { synthECG } from './ecg'
+import type { Dataset, MeasureResult } from './ecg'
 
-export function infer(ds, m, hr) {
-  let pF
+export interface InferResult {
+  klas: string
+  conf: number
+  probs: number[]
+}
+
+export function infer(ds: Dataset, m: MeasureResult, hr: number): InferResult {
+  let pF: number
   if (ds.kind === 'hfref') pF = 0.88 + Math.random() * 0.1
   else if (ds.kind === 'hfpEF') pF = 0.04 + Math.random() * 0.09
   else {
@@ -17,8 +24,8 @@ export function infer(ds, m, hr) {
   return { klas: pF >= 0.5 ? 'HFrEF' : 'HFpEF', conf: Math.max(probs[0], probs[1]), probs }
 }
 
-export function buildFindings(ds, m, hr) {
-  const F = []
+export function buildFindings(ds: Dataset, m: MeasureResult, hr: number): string[] {
+  const F: string[] = []
   F.push(
     m.amp < 0.85
       ? `Voltase QRS rendah (${m.amp.toFixed(2).replace('.', ',')} mV) — sering terkait disfungsi sistolik.`
@@ -44,7 +51,23 @@ export function buildFindings(ds, m, hr) {
   return F
 }
 
-export function downloadReport(e) {
+export interface ReportEntry {
+  id: string
+  ts: number
+  src: string
+  klas: string
+  conf: number
+  probs: number[]
+  stats: {
+    hr: number
+    amp: number
+    qrsW: number
+    sdnn: number
+  }
+  thumb: string | null
+}
+
+export function downloadReport(e: ReportEntry): void {
   if (!e) return
   const lines = [
     '════════════════════════════════════════════',
@@ -83,7 +106,7 @@ export function downloadReport(e) {
   URL.revokeObjectURL(a.href)
 }
 
-export async function downloadSampleCsv(kind, toastFn) {
+export async function downloadSampleCsv(kind: string, toastFn: (msg: string, type: string) => void): Promise<void> {
   const x = synthECG(kind)
   let csv = 'time_s,voltage_mV\n'
   for (let i = 0; i < x.length; i++) csv += (i / 250).toFixed(4) + ',' + x[i].toFixed(4) + '\n'

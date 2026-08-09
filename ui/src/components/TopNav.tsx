@@ -1,5 +1,5 @@
-import { HeartIcon } from './icons.jsx'
-import { fmtFullDate } from '../lib/format.js'
+import { HeartIcon } from './icons'
+import { fmtFullDate } from '../lib/format'
 
 const TABS = [
   { id: 'analisis', label: 'Analisis' },
@@ -7,7 +7,13 @@ const TABS = [
   { id: 'model', label: 'Model' },
 ]
 
-export default function TopNav({ view, setView, histCount }) {
+interface TopNavProps {
+  view: string
+  setView: (view: string) => void
+  histCount: number
+}
+
+export default function TopNav({ view, setView, histCount }: TopNavProps) {
   return (
     <nav className="sticky top-0 z-50 border-b border-line bg-white/88 backdrop-blur-md">
       <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-[22px] px-6 py-[13px] max-[640px]:gap-[10px]">

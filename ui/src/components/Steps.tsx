@@ -1,8 +1,14 @@
-import { CheckIcon } from './icons.jsx'
+import { CheckIcon } from './icons'
 
 const LABELS = ['Unggah Data', 'Preprocessing', 'CWT', 'Inferensi CNN']
 
-export default function Steps({ steps, progress = 0, stage = 'siap · menunggu data' }) {
+interface StepsProps {
+  steps: string[]
+  progress?: number
+  stage?: string
+}
+
+export default function Steps({ steps, progress = 0, stage = 'siap · menunggu data' }: StepsProps) {
   return (
     <>
       <ol className="mb-3 mt-1 flex list-none flex-wrap items-center gap-3">

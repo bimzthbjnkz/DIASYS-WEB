@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { sleep } from '../lib/format.js'
+import { sleep } from '../lib/format'
 import {
   absPercentile,
   bestLead,
@@ -11,37 +11,91 @@ import {
   parseDelimited,
   preprocess,
   synthECG,
-} from '../lib/ecg.js'
-import { infer } from '../lib/report.js'
-import { captureScalogramThumb } from '../lib/draw.js'
+} from '../lib/ecg'
+import type { Dataset, MeasureResult, PeakResult, ScalResult } from '../lib/ecg'
+import { infer } from '../lib/report'
+import type { InferResult, ReportEntry } from '../lib/report'
+import { captureScalogramThumb } from '../lib/draw'
 
-export function useAnalysis({ toast, onNewEntry }) {
-  const [dataset, setDataset] = useState(null)
+interface UseAnalysisParams {
+  toast: (msg: string, type?: string) => void
+  onNewEntry?: (entry: ReportEntry) => void
+}
+
+interface LeadOption {
+  i: number
+  label: string
+}
+
+export interface UseAnalysisReturn {
+  toast: (msg: string, type?: string) => void
+  dataset: Dataset | null
+  fs: number
+  setFs: (fs: number) => void
+  lead: number
+  setLead: (lead: number) => void
+  running: boolean
+  raw: Float32Array | null
+  pre: Float32Array | null
+  fsUsed: number
+  hr: number
+  peaksIdx: number[]
+  peaksTime: number[]
+  scal: ScalResult | null
+  klas: string | null
+  lastEntry: ReportEntry | null
+  colormap: string
+  setColormap: (c: string) => void
+  gradcam: boolean
+  setGradcam: (g: boolean) => void
+  steps: string[]
+  progress: number
+  stage: string
+  unitNote: string
+  leadOptions: LeadOption[]
+  scalCanvasRef: React.RefObject<HTMLCanvasElement | null>
+  finishDataset: (
+    name: string,
+    cols: Float32Array[],
+    names: string[],
+    defaultFs: number,
+    note: string,
+    kind?: string
+  ) => void
+  loadFile: (file: File) => Promise<void>
+  loadSample: (kind: string) => void
+  clearData: () => void
+  runAnalysis: () => Promise<void>
+  markStep: (i: number, st: string) => void
+}
+
+export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalysisReturn {
+  const [dataset, setDataset] = useState<Dataset | null>(null)
   const [fs, setFs] = useState(250)
   const [lead, setLead] = useState(0)
   const [running, setRunning] = useState(false)
 
-  const [raw, setRaw] = useState(null)
-  const [pre, setPre] = useState(null)
+  const [raw, setRaw] = useState<Float32Array | null>(null)
+  const [pre, setPre] = useState<Float32Array | null>(null)
   const [fsUsed, setFsUsed] = useState(250)
   const [hr, setHr] = useState(0)
-  const [peaksIdx, setPeaksIdx] = useState([])
-  const [peaksTime, setPeaksTime] = useState([])
-  const [scal, setScal] = useState(null)
-  const [klas, setKlas] = useState(null)
-  const [lastEntry, setLastEntry] = useState(null)
+  const [peaksIdx, setPeaksIdx] = useState<number[]>([])
+  const [peaksTime, setPeaksTime] = useState<number[]>([])
+  const [scal, setScal] = useState<ScalResult | null>(null)
+  const [klas, setKlas] = useState<string | null>(null)
+  const [lastEntry, setLastEntry] = useState<ReportEntry | null>(null)
   const [colormap, setColormap] = useState('inferno')
   const [gradcam, setGradcam] = useState(false)
 
-  const [steps, setSteps] = useState(['', '', '', ''])
+  const [steps, setSteps] = useState<string[]>(['', '', '', ''])
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('siap · menunggu data')
 
-  const scalCanvasRef = useRef(null)
+  const scalCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const runRef = useRef(false)
   const seqRef = useRef(5013)
 
-  const markStep = useCallback((i, st) => {
+  const markStep = useCallback((i: number, st: string) => {
     setSteps((prev) => {
       const next = [...prev]
       next[i] = st
@@ -49,7 +103,7 @@ export function useAnalysis({ toast, onNewEntry }) {
     })
   }, [])
 
-  const resetRunUI = useCallback((keepDone, hasData = !!dataset) => {
+  const resetRunUI = useCallback((keepDone: boolean, hasData = !!dataset) => {
     setSteps((prev) => {
       const next = [...prev]
       for (let i = 1; i < 4; i++) next[i] = ''
@@ -82,7 +136,14 @@ export function useAnalysis({ toast, onNewEntry }) {
   }, [dataset])
 
   const finishDataset = useCallback(
-    (name, cols, names, defaultFs, note, kind = 'upload') => {
+    (
+      name: string,
+      cols: Float32Array[],
+      names: string[],
+      defaultFs: number,
+      note: string,
+      kind = 'upload'
+    ) => {
       setDataset({ name, cols, names, kind, note })
       setFs(defaultFs)
       const ls = cols.length > 1 ? bestLead(cols) : 0
@@ -98,7 +159,7 @@ export function useAnalysis({ toast, onNewEntry }) {
   )
 
   const loadFile = useCallback(
-    async (file) => {
+    async (file: File) => {
       const name = file.name
       const lower = name.toLowerCase()
       toast(`Membaca file "${name}"…`, 'info')
@@ -130,14 +191,14 @@ export function useAnalysis({ toast, onNewEntry }) {
         }
         finishDataset(name, p.cols, p.names, 250, 'delimiter & header otomatis')
       } catch (err) {
-        toast('Gagal membaca file: ' + err.message, 'warn')
+        toast('Gagal membaca file: ' + (err instanceof Error ? err.message : String(err)), 'warn')
       }
     },
     [finishDataset, toast],
   )
 
   const loadSample = useCallback(
-    (kind) => {
+    (kind: string) => {
       if (running) return toast('Tunggu analisis selesai.', 'warn')
       const sig = synthECG(kind)
       setDataset({
@@ -196,12 +257,12 @@ export function useAnalysis({ toast, onNewEntry }) {
     setProgress(16)
     await sleep(360)
     const y = preprocess(rawSig, rfs)
-    const det = detectPeaks(y, rfs)
+    const det: PeakResult = detectPeaks(y, rfs)
     const peaks = det.idx
     setPeaksIdx(peaks)
     setPeaksTime(peaks.map((i) => i / rfs))
     setPre(y)
-    const m = measure(det.yy, rfs, peaks)
+    const m: MeasureResult = measure(det.yy, rfs, peaks)
     const hr = peaks.length > 1 ? Math.round((60 * (peaks.length - 1)) / ((peaks[peaks.length - 1] - peaks[0]) / rfs)) : 0
     setHr(hr)
     await sleep(280)
@@ -227,12 +288,12 @@ export function useAnalysis({ toast, onNewEntry }) {
       setProgress(64 + ((i + 1) / layers) * 24)
       await sleep(200)
     }
-    const res = infer(ds, m, hr)
+    const res: InferResult = infer(ds, m, hr)
     setKlas(res.klas)
 
     const thumb = captureScalogramThumb(scalRes, y, peaks.map((i) => i / rfs), res.klas)
 
-    const entry = {
+    const entry: ReportEntry = {
       id: 'CW-' + seqRef.current++,
       ts: Date.now(),
       src: ds.name,

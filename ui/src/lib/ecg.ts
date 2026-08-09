@@ -1,15 +1,15 @@
-import { toNum } from './format.js'
+import { toNum } from './format'
 
 /* ---------------- Sintesis sinyal EKG ---------------- */
-export function gauss(t, mu, s) {
+export function gauss(t: number, mu: number, s: number): number {
   return Math.exp(-((t - mu) * (t - mu)) / (2 * s * s))
 }
 
-export function synthECG(kind, seconds = 10, fs = 250) {
+export function synthECG(kind: string, seconds = 10, fs = 250): Float32Array {
   const n = Math.floor(seconds * fs)
   const x = new Float32Array(n)
   const bpm = kind === 'hfref' ? 84 : 72
-  const beats = []
+  const beats: number[] = []
   let t = 0.45
   while (t < seconds - 0.5) {
     beats.push(t)
@@ -46,7 +46,12 @@ export function synthECG(kind, seconds = 10, fs = 250) {
 }
 
 /* ---------------- Parser file ---------------- */
-export function parseDelimited(text) {
+export interface ParseResult {
+  cols: Float32Array[]
+  names: string[]
+}
+
+export function parseDelimited(text: string): ParseResult | null {
   const lines = text.split(/\r?\n/)
   const probe = lines.filter((l) => l.trim()).slice(0, 12)
   let delim = ' '
@@ -58,9 +63,10 @@ export function parseDelimited(text) {
       delim = d
     }
   }
-  const splitLine = (l) => (delim === ' ' ? l.trim().split(/\s+/) : l.split(delim).map((s) => s.trim()))
-  let header = null
-  const grid = []
+  const splitLine = (l: string): string[] =>
+    delim === ' ' ? l.trim().split(/\s+/) : l.split(delim).map((s) => s.trim())
+  let header: string[] | null = null
+  const grid: number[][] = []
   for (const line of lines) {
     if (!line.trim()) continue
     const cells = splitLine(line)
@@ -75,10 +81,10 @@ export function parseDelimited(text) {
   }
   if (!grid.length) return null
   const ncols = Math.max(...grid.slice(0, 100).map((r) => r.length))
-  const cols = []
-  const names = []
+  const cols: Float32Array[] = []
+  const names: string[] = []
   for (let c = 0; c < ncols; c++) {
-    const arr = []
+    const arr: number[] = []
     let bad = 0
     for (const r of grid) {
       const v = r[c]
@@ -93,7 +99,7 @@ export function parseDelimited(text) {
   return cols.length ? { cols, names } : null
 }
 
-export function decode212(buf) {
+export function decode212(buf: ArrayBuffer): [Float32Array, Float32Array] {
   const bytes = new Uint8Array(buf)
   const frames = Math.floor(bytes.length / 3)
   const ch0 = new Float32Array(frames)
@@ -112,12 +118,12 @@ export function decode212(buf) {
   return [ch0, ch1]
 }
 
-export function bestLead(cols) {
+export function bestLead(cols: Float32Array[]): number {
   let bi = 0
   let bv = -1
   cols.forEach((c, i) => {
     const step = Math.max(1, Math.floor(c.length / 500))
-    const s = []
+    const s: number[] = []
     for (let j = 0; j < c.length; j += step) s.push(c[j])
     s.sort((a, b) => a - b)
     const rng = s[Math.floor(s.length * 0.95)] - s[Math.floor(s.length * 0.05)]
@@ -129,22 +135,30 @@ export function bestLead(cols) {
   return bi
 }
 
-export function absPercentile(x, p) {
+export function absPercentile(x: Float32Array, p: number): number {
   const step = Math.max(1, Math.floor(x.length / 400))
-  const s = []
+  const s: number[] = []
   for (let i = 0; i < x.length; i += step) s.push(Math.abs(x[i]))
   s.sort((a, b) => a - b)
   return s[Math.floor(s.length * p)] || 1
 }
 
-export function pickScale(col) {
+export function pickScale(col: Float32Array): number {
   const ap = absPercentile(col, 0.98)
   if (ap > 1000) return 0.001
   if (ap > 60) return 1 / 200
   return 1
 }
 
-export function getSignal(dataset, fs, leadIdx) {
+export interface Dataset {
+  name: string
+  cols: Float32Array[]
+  names: string[]
+  kind: string
+  note: string
+}
+
+export function getSignal(dataset: Dataset, fs: number, leadIdx: number): { raw: Float32Array; fs: number } {
   const col = dataset.cols[leadIdx]
   const scale = pickScale(col)
   const cap = Math.min(col.length, Math.floor(12 * fs))
@@ -154,7 +168,7 @@ export function getSignal(dataset, fs, leadIdx) {
 }
 
 /* ---------------- Preprocessing ---------------- */
-export function preprocess(sig, fs) {
+export function preprocess(sig: Float32Array, fs: number): Float32Array {
   const n = sig.length
   const w = Math.max(Math.floor(fs * 0.6), 25)
   const pref = new Float64Array(n + 1)
@@ -185,7 +199,13 @@ export function preprocess(sig, fs) {
   return s
 }
 
-export function detectPeaks(y, fs) {
+export interface PeakResult {
+  idx: number[]
+  flip: boolean
+  yy: Float32Array
+}
+
+export function detectPeaks(y: Float32Array, fs: number): PeakResult {
   let mx = 0
   let mn = 0
   for (let i = 0; i < y.length; i++) {
@@ -198,7 +218,7 @@ export function detectPeaks(y, fs) {
   for (let i = 0; i < yy.length; i++) if (yy[i] > pm) pm = yy[i]
   const thr = pm * 0.35
   const minD = Math.floor(fs * 0.4)
-  const idx = []
+  const idx: number[] = []
   let last = -1e9
   for (let i = 2; i < yy.length - 2; i++) {
     if (yy[i] > thr && yy[i] >= yy[i - 1] && yy[i] > yy[i + 1] && i - last >= minD) {
@@ -209,7 +229,13 @@ export function detectPeaks(y, fs) {
   return { idx, flip, yy }
 }
 
-export function measure(yy, fs, peaks) {
+export interface MeasureResult {
+  amp: number
+  qrsW: number
+  sdnn: number
+}
+
+export function measure(yy: Float32Array, fs: number, peaks: number[]): MeasureResult {
   let amp = 0
   let wSum = 0
   let cnt = 0
@@ -223,7 +249,7 @@ export function measure(yy, fs, peaks) {
     wSum += ((r - l) / fs) * 1000
     cnt++
   }
-  const rr = []
+  const rr: number[] = []
   for (let i = 1; i < peaks.length; i++) rr.push(((peaks[i] - peaks[i - 1]) / fs) * 1000)
   let sdnn = 0
   if (rr.length > 1) {
@@ -234,14 +260,29 @@ export function measure(yy, fs, peaks) {
 }
 
 /* ---------------- CWT (Morlet) ---------------- */
-export async function cwtScalogram(y, fs, onProg) {
+export interface ScalResult {
+  mag: Float32Array
+  scales: number[]
+  T: number
+  ns: number
+  fs: number
+  p99: number
+  a0: number
+  ratio: number
+}
+
+export async function cwtScalogram(
+  y: Float32Array,
+  fs: number,
+  onProg: (p: number) => void
+): Promise<ScalResult> {
   const n = y.length
   const step = Math.max(2, Math.round(fs / 125))
   const T = Math.floor(n / step)
   const ns = 56
   const a0 = Math.max(1.5, (0.968 * fs) / 121)
   const ratio = Math.pow(121 / 1.2, 1 / 55)
-  const scales = []
+  const scales: number[] = []
   for (let i = 0; i < ns; i++) scales.push(a0 * Math.pow(ratio, i))
   const mag = new Float32Array(ns * T)
   const w0 = 6
@@ -284,6 +325,6 @@ export async function cwtScalogram(y, fs, onProg) {
   return { mag, scales, T, ns, fs, p99, a0, ratio }
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }

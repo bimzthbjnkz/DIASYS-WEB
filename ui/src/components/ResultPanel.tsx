@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import Card from './Card.jsx'
-import { DownloadIcon, RefreshIcon } from './icons.jsx'
-import { fmtPct, fmtTime } from '../lib/format.js'
-import { downloadReport } from '../lib/report.js'
+import Card from './Card'
+import { DownloadIcon, RefreshIcon } from './icons'
+import { fmtPct, fmtTime } from '../lib/format'
+import { downloadReport } from '../lib/report'
+import type { ReportEntry } from '../lib/report'
+import type { UseAnalysisReturn } from '../hooks/useAnalysis'
 
-function useAnimatedNumber(target, duration = 1100) {
+function useAnimatedNumber(target: number, duration = 1100): number {
   const [val, setVal] = useState(0)
-  const rafRef = useRef(null)
+  const rafRef = useRef<number>(0)
 
   useEffect(() => {
     const t0 = performance.now()
-    const tick = (t) => {
+    const tick = (t: number) => {
       const p = Math.min(1, (t - t0) / duration)
       const e = 1 - Math.pow(1 - p, 3)
       setVal(target * e)
@@ -23,7 +25,7 @@ function useAnimatedNumber(target, duration = 1100) {
   return val
 }
 
-function ConfidenceRing({ conf }) {
+function ConfidenceRing({ conf }: { conf: number }) {
   const anim = useAnimatedNumber(conf)
   const offset = 283 * (1 - anim)
   return (
@@ -48,7 +50,7 @@ function ConfidenceRing({ conf }) {
   )
 }
 
-function ProbRow({ color, label, prob }) {
+function ProbRow({ color, label, prob }: { color: string; label: string; prob: number }) {
   return (
     <div className="mt-[11px]">
       <div className="mb-1.5 flex justify-between text-[12.5px] font-semibold">
@@ -69,7 +71,11 @@ function ProbRow({ color, label, prob }) {
   )
 }
 
-export default function ResultPanel({ a }) {
+interface ResultPanelProps {
+  a: UseAnalysisReturn
+}
+
+export default function ResultPanel({ a }: ResultPanelProps) {
   const e = a.lastEntry
   const hasResult = !!e
   const findings = e ? buildFindings(e) : []
@@ -93,7 +99,7 @@ export default function ResultPanel({ a }) {
   }
 
   return (
-    <Card title="Hasil Klasifikasi" hint={<span className="mono">{e.id} · {fmtTime(e.ts)}</span>}>
+    <Card title="Hasil Klasifikasi" hint={`${e.id} · ${fmtTime(e.ts)}`}>
       <div className="flex items-center gap-[18px]">
         <div>
           <div className="sec-title mb-2">Prediksi</div>
@@ -167,8 +173,8 @@ export default function ResultPanel({ a }) {
   )
 }
 
-function buildFindings(e) {
-  const F = []
+function buildFindings(e: ReportEntry): string[] {
+  const F: string[] = []
   const m = e.stats
   F.push(
     m.amp < 0.85

@@ -1,4 +1,4 @@
-export const MAPS = {
+export const MAPS: Record<string, number[][]> = {
   inferno: [
     [0, 1, 0, 4],
     [0.12, 26, 11, 64],
@@ -33,7 +33,7 @@ export const MAPS = {
   ],
 }
 
-export function mapColor(name, v) {
+export function mapColor(name: string, v: number): number[] {
   v = Math.max(0, Math.min(1, v))
   const s = MAPS[name]
   let i = 0

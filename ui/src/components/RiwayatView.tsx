@@ -1,5 +1,6 @@
-import { SearchIcon, ClockIcon, EyeIcon, TrashIcon } from './icons.jsx'
-import { fmtDate, fmtPct, fmtTime } from '../lib/format.js'
+import { SearchIcon, ClockIcon, EyeIcon, TrashIcon } from './icons'
+import { fmtDate, fmtPct, fmtTime } from '../lib/format'
+import type { ReportEntry } from '../lib/report'
 
 const FILTERS = [
   { id: 'all', label: 'Semua' },
@@ -7,7 +8,17 @@ const FILTERS = [
   { id: 'HFrEF', label: 'HFrEF' },
 ]
 
-export default function RiwayatView({ history, filter, setFilter, q, setQ, onView, onDelete }) {
+interface RiwayatViewProps {
+  history: ReportEntry[]
+  filter: string
+  setFilter: (filter: string) => void
+  q: string
+  setQ: (q: string) => void
+  onView: (entry: ReportEntry) => void
+  onDelete: (entry: ReportEntry) => void
+}
+
+export default function RiwayatView({ history, filter, setFilter, q, setQ, onView, onDelete }: RiwayatViewProps) {
   const rows = history.filter(
     (e) =>
       (filter === 'all' || e.klas === filter) &&

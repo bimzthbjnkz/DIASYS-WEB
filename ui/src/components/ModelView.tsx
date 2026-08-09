@@ -1,17 +1,17 @@
 import { useEffect, useRef } from 'react'
-import Card from './Card.jsx'
-import { GridIcon, LayersIcon, WaveIcon } from './icons.jsx'
-import { drawTraining } from '../lib/draw.js'
+import Card from './Card'
+import { GridIcon, LayersIcon, WaveIcon } from './icons'
+import { drawTraining } from '../lib/draw'
 
 function TrainCanvas() {
-  const ref = useRef(null)
+  const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     if (ref.current) drawTraining(ref.current)
   }, [])
   return <canvas ref={ref} width={1100} height={480} className="block h-auto w-full" />
 }
 
-const ARCH = [
+const ARCH: [string, string, string][] = [
   ['00', 'Input — scalogram CWT', '224×224×3'],
   ['01', 'Conv2D 32@3×3 + BN + ReLU + MaxPool', '112×112×32'],
   ['02', 'Conv2D 64@3×3 + BN + ReLU + MaxPool', '56×56×64'],
@@ -22,7 +22,7 @@ const ARCH = [
   ['07', 'Dense 2 + Softmax → HFpEF / HFrEF', '2'],
 ]
 
-const METRICS = [
+const METRICS: [string, string, number][] = [
   ['Akurasi', '94,6%', 94.6],
   ['Sensitivitas', '93,7%', 93.7],
   ['Spesifisitas', '95,6%', 95.6],
@@ -32,7 +32,7 @@ const METRICS = [
 export default function ModelView() {
   useEffect(() => {
     const timer = setTimeout(() => {
-      document.querySelectorAll('[data-fill]').forEach((f) => {
+      document.querySelectorAll<HTMLElement>('[data-fill]').forEach((f) => {
         f.style.width = f.dataset.fill + '%'
       })
     }, 100)

@@ -1,10 +1,17 @@
 import { useEffect } from 'react'
-import { CloseIcon, DownloadIcon } from './icons.jsx'
-import { fmtDate, fmtPct, fmtTime } from '../lib/format.js'
+import { CloseIcon, DownloadIcon } from './icons'
+import { fmtDate, fmtPct, fmtTime } from '../lib/format'
+import type { ReportEntry } from '../lib/report'
 
-export default function Modal({ entry, onClose, onDownload }) {
+interface ModalProps {
+  entry: ReportEntry | null
+  onClose: () => void
+  onDownload: (entry: ReportEntry) => void
+}
+
+export default function Modal({ entry, onClose, onDownload }: ModalProps) {
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)

@@ -1,6 +1,15 @@
-import { ChartIcon, HeartIcon, InboxIcon } from './icons.jsx'
+import { ChartIcon, HeartIcon, InboxIcon } from './icons'
 
-export default function StatStrip({ stats }) {
+interface StatStripProps {
+  stats: {
+    total: number
+    p: number
+    f: number
+    avg: string
+  }
+}
+
+export default function StatStrip({ stats }: StatStripProps) {
   const items = [
     {
       label: 'Total Analisis',

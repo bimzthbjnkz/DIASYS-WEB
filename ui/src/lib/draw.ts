@@ -1,11 +1,17 @@
-import { mapColor } from './colormaps.js'
+import { mapColor } from './colormaps'
+import type { ScalResult } from './ecg'
 
-export function captureScalogramThumb(scal, pre, peaksTime, klas) {
+export function captureScalogramThumb(
+  scal: ScalResult,
+  pre: Float32Array,
+  peaksTime: number[],
+  klas: string
+): string {
   const cnv = document.createElement('canvas')
   cnv.width = 1200
   cnv.height = 440
-  const ctx = cnv.getContext('2d')
-  renderScalogram(ctx, cnv, cnv.width, cnv.height, {
+  const ctx = cnv.getContext('2d')!
+  renderScalogram(ctx, cnv.width, cnv.height, {
     scal,
     colormap: 'inferno',
     gradcam: false,
@@ -16,8 +22,8 @@ export function captureScalogramThumb(scal, pre, peaksTime, klas) {
   return cnv.toDataURL('image/jpeg', 0.82)
 }
 
-export function drawEmpty(cnv, msg) {
-  const ctx = cnv.getContext('2d')
+export function drawEmpty(cnv: HTMLCanvasElement, msg: string): void {
+  const ctx = cnv.getContext('2d')!
   const W = cnv.width
   const H = cnv.height
   ctx.fillStyle = '#fff'
@@ -38,8 +44,14 @@ export function drawEmpty(cnv, msg) {
   ctx.textAlign = 'left'
 }
 
-export function drawECG(cnv, data, fs, color, peaks = []) {
-  const ctx = cnv.getContext('2d')
+export function drawECG(
+  cnv: HTMLCanvasElement,
+  data: Float32Array,
+  fs: number,
+  color: string,
+  peaks: number[] = []
+): void {
+  const ctx = cnv.getContext('2d')!
   const W = cnv.width
   const H = cnv.height
   ctx.fillStyle = '#fff'
@@ -104,11 +116,25 @@ export function drawECG(cnv, data, fs, color, peaks = []) {
   ctx.textAlign = 'left'
 }
 
-export function siForFreq(sc, f) {
+export function siForFreq(sc: ScalResult, f: number): number {
   return Math.log((0.968 * sc.fs) / f / sc.a0) / Math.log(sc.ratio)
 }
 
-export function renderScalogram(ctx, cnv, W, H, state) {
+interface ScalogramState {
+  scal: ScalResult
+  colormap: string
+  gradcam: boolean
+  peaksTime: number[]
+  klas: string
+  pre: Float32Array | null
+}
+
+export function renderScalogram(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  state: ScalogramState
+): void {
   const { scal, colormap, gradcam, peaksTime, klas, pre } = state
   if (!scal) return
   ctx.fillStyle = '#fff'
@@ -123,7 +149,7 @@ export function renderScalogram(ctx, cnv, W, H, state) {
   const off = document.createElement('canvas')
   off.width = T
   off.height = ns
-  const octx = off.getContext('2d')
+  const octx = off.getContext('2d')!
   const img = octx.createImageData(T, ns)
   const mapName = colormap
   const denom = Math.log1p(p99 * 7)
@@ -167,16 +193,33 @@ export function renderScalogram(ctx, cnv, W, H, state) {
   ctx.textAlign = 'left'
 }
 
-function drawGradCam(ctx, padL, padT, pw, ph, sc, peaksTime, cls, fs) {
+function drawGradCam(
+  ctx: CanvasRenderingContext2D,
+  padL: number,
+  padT: number,
+  pw: number,
+  ph: number,
+  sc: ScalResult,
+  peaksTime: number[],
+  cls: string,
+  fs: number
+): void {
   const { T, ns } = sc
   const cam = document.createElement('canvas')
   cam.width = T
   cam.height = ns
-  const c2 = cam.getContext('2d')
+  const c2 = cam.getContext('2d')!
   c2.globalCompositeOperation = 'lighter'
   const step = Math.max(2, Math.round(fs / 125))
-  const biOf = (t) => Math.max(0, Math.min(T - 1, Math.round((t * fs) / step)))
-  function blob(bi, si, rx, ry, core, mid) {
+  const biOf = (t: number): number => Math.max(0, Math.min(T - 1, Math.round((t * fs) / step)))
+  function blob(
+    bi: number,
+    si: number,
+    rx: number,
+    ry: number,
+    core: string,
+    mid: string
+  ): void {
     if (si < 0 || si > ns) return
     c2.save()
     c2.translate(bi, si)
@@ -207,8 +250,8 @@ function drawGradCam(ctx, padL, padT, pw, ph, sc, peaksTime, cls, fs) {
   ctx.globalAlpha = 1
 }
 
-export function drawTraining(cnv) {
-  const ctx = cnv.getContext('2d')
+export function drawTraining(cnv: HTMLCanvasElement): void {
+  const ctx = cnv.getContext('2d')!
   const W = cnv.width
   const H = cnv.height
   ctx.fillStyle = '#fff'
@@ -233,9 +276,9 @@ export function drawTraining(cnv) {
     ctx.fillText((1 - i * 0.25).toFixed(2), padL - 10, yy + 5)
   }
   const E = 60
-  const acc = []
-  const val = []
-  const loss = []
+  const acc: number[] = []
+  const val: number[] = []
+  const loss: number[] = []
   let a = 0.6
   let l = 0.66
   for (let i = 0; i < E; i++) {
@@ -245,9 +288,9 @@ export function drawTraining(cnv) {
     loss.push(l)
     val.push(Math.max(0.55, a - 0.02 + Math.sin(i * 1.9) * 0.012))
   }
-  const X = (i) => padL + (i / (E - 1)) * pw
-  const Y = (v) => padT + (1 - v) * ph
-  function plot(arr, col, dash) {
+  const X = (i: number): number => padL + (i / (E - 1)) * pw
+  const Y = (v: number): number => padT + (1 - v) * ph
+  function plot(arr: number[], col: string, dash: boolean): void {
     ctx.beginPath()
     arr.forEach((v, i) => (i ? ctx.lineTo(X(i), Y(v)) : ctx.moveTo(X(i), Y(v))))
     ctx.strokeStyle = col
@@ -269,6 +312,6 @@ export function drawTraining(cnv) {
   ctx.fillText('-- Loss', padL + 380, padT - 14)
   ctx.fillStyle = '#94a3b8'
   ctx.textAlign = 'center'
-  for (let e2 = 0; e2 <= E; e2 += 10) ctx.fillText(e2, X(Math.min(e2, E - 1)), H - 16)
+  for (let e2 = 0; e2 <= E; e2 += 10) ctx.fillText(e2.toString(), X(Math.min(e2, E - 1)), H - 16)
   ctx.fillText('Epoch', W / 2, H - 2)
 }

@@ -1,11 +1,19 @@
 import { useCallback, useRef, useState } from 'react'
-import { toastIcons } from '../lib/toastIcons.jsx'
+import type { JSX } from 'react'
+import { toastIcons } from '../lib/toastIcons'
 
-export function useToasts() {
-  const [toasts, setToasts] = useState([])
+export interface Toast {
+  id: number
+  msg: string
+  type: string
+  out?: boolean
+}
+
+export function useToasts(): { toasts: Toast[]; toast: (msg: string, type?: string) => void } {
+  const [toasts, setToasts] = useState<Toast[]>([])
   const idRef = useRef(0)
 
-  const toast = useCallback((msg, type = 'info') => {
+  const toast = useCallback((msg: string, type = 'info') => {
     const id = ++idRef.current
     setToasts((prev) => [...prev, { id, msg, type }])
     setTimeout(() => {
@@ -19,6 +27,6 @@ export function useToasts() {
   return { toasts, toast }
 }
 
-export function toastTypeIcon(type) {
+export function toastTypeIcon(type: string): JSX.Element {
   return toastIcons[type] || toastIcons.info
 }

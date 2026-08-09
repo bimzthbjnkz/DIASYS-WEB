@@ -1,24 +1,30 @@
 import { useRef } from 'react'
-import Card from './Card.jsx'
-import Steps from './Steps.jsx'
-import StatStrip from './StatStrip.jsx'
-import SignalCanvas from './SignalCanvas.jsx'
-import ScalogramCanvas from './ScalogramCanvas.jsx'
-import ResultPanel from './ResultPanel.jsx'
+import Card from './Card'
+import Steps from './Steps'
+import StatStrip from './StatStrip'
+import SignalCanvas from './SignalCanvas'
+import ScalogramCanvas from './ScalogramCanvas'
+import ResultPanel from './ResultPanel'
 import {
   DownloadIcon,
   FileIcon,
   PlayIcon,
   UploadIcon,
-} from './icons.jsx'
-import { toLocaleId } from '../lib/format.js'
-import { downloadSampleCsv } from '../lib/report.js'
+} from './icons'
+import { toLocaleId } from '../lib/format'
+import { downloadSampleCsv } from '../lib/report'
+import type { UseAnalysisReturn } from '../hooks/useAnalysis'
+import type { ReportEntry } from '../lib/report'
 
-function UploadCard({ a }) {
-  const fileInputRef = useRef(null)
+interface UploadCardProps {
+  a: UseAnalysisReturn
+}
+
+function UploadCard({ a }: UploadCardProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const dragging = useRef(false)
 
-  const onDrop = (e) => {
+  const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     dragging.current = false
     const f = e.dataTransfer.files[0]
@@ -77,7 +83,7 @@ function UploadCard({ a }) {
           accept=".csv,.txt,.dat,.hea"
           hidden
           onChange={(e) => {
-            if (e.target.files[0]) a.loadFile(e.target.files[0])
+            if (e.target.files?.[0]) a.loadFile(e.target.files[0])
             e.target.value = ''
           }}
         />
@@ -164,7 +170,11 @@ function UploadCard({ a }) {
 
 const FSS_OPTIONS = [128, 200, 250, 256, 360, 500]
 
-function SignalSection({ a }) {
+interface SignalSectionProps {
+  a: UseAnalysisReturn
+}
+
+function SignalSection({ a }: SignalSectionProps) {
   const rawTag = a.raw ? `${toLocaleId(a.raw.length)} sampel · ${a.fsUsed} Hz` : 'menunggu data'
   const preTag = a.pre ? `${a.peaksIdx.length} kompleks · HR≈${a.hr} bpm` : 'menunggu tahap 2'
   return (
@@ -183,7 +193,11 @@ function SignalSection({ a }) {
   )
 }
 
-function ScalogramSection({ a }) {
+interface ScalogramSectionProps {
+  a: UseAnalysisReturn
+}
+
+function ScalogramSection({ a }: ScalogramSectionProps) {
   return (
     <Card title="3 · Scalogram CWT" hint="input jaringan CNN">
       <ScalogramCanvas
@@ -268,7 +282,18 @@ function PipelineCard() {
   )
 }
 
-export default function AnalisisView({ a, stats }) {
+interface AnalisisViewProps {
+  a: UseAnalysisReturn
+  stats: {
+    p: number
+    f: number
+    total: number
+    avg: string
+  }
+  onOpenModal: (entry: ReportEntry | null) => void
+}
+
+export default function AnalisisView({ a, stats }: AnalisisViewProps) {
   return (
     <>
       <div className="page-head mb-[22px]">

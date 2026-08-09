@@ -1,12 +1,17 @@
-import { toastIcons } from '../lib/toastIcons.jsx'
+import { toastIcons } from '../lib/toastIcons'
+import type { Toast } from '../hooks/useToasts'
 
-const ICON_COLOR = {
+const ICON_COLOR: Record<string, string> = {
   success: 'text-green',
   warn: 'text-amber',
   info: 'text-primary',
 }
 
-export default function Toasts({ toasts }) {
+interface ToastsProps {
+  toasts: Toast[]
+}
+
+export default function Toasts({ toasts }: ToastsProps) {
   return (
     <div className="fixed right-[22px] bottom-[22px] z-[200] flex flex-col gap-[10px]">
       {toasts.map((t) => (

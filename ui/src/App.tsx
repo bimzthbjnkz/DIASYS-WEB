@@ -1,20 +1,47 @@
 import { useEffect, useMemo, useState } from 'react'
-import TopNav from './components/TopNav.jsx'
-import AnalisisView from './components/AnalisisView.jsx'
-import RiwayatView from './components/RiwayatView.jsx'
-import ModelView from './components/ModelView.jsx'
-import Modal from './components/Modal.jsx'
-import Toasts from './components/Toasts.jsx'
-import { useToasts } from './hooks/useToasts.jsx'
-import { useAnalysis } from './hooks/useAnalysis.js'
-import { downloadReport } from './lib/report.js'
-import { fmtPct } from './lib/format.js'
+import TopNav from './components/TopNav'
+import AnalisisView from './components/AnalisisView'
+import RiwayatView from './components/RiwayatView'
+import ModelView from './components/ModelView'
+import Modal from './components/Modal'
+import Toasts from './components/Toasts'
+import { useToasts } from './hooks/useToasts'
+import { useAnalysis } from './hooks/useAnalysis'
+import { downloadReport } from './lib/report'
+import { fmtPct } from './lib/format'
+import type { ReportEntry } from './lib/report'
 
 const DAY = 864e5
 
-function seedHistory() {
+interface SeedEntry {
+  id: string
+  ts: number
+  src: string
+  klas: string
+  conf: number
+  probs: number[]
+  stats: {
+    hr: number
+    amp: number
+    qrsW: number
+    sdnn: number
+  }
+  thumb: string | null
+}
+
+function seedHistory(): SeedEntry[] {
   const now = Date.now()
-  const mk = (id, d, src, klas, conf, hr, amp, w, sd) => ({
+  const mk = (
+    id: string,
+    d: number,
+    src: string,
+    klas: string,
+    conf: number,
+    hr: number,
+    amp: number,
+    w: number,
+    sd: number
+  ): SeedEntry => ({
     id,
     ts: now - d,
     src,
@@ -35,14 +62,14 @@ function seedHistory() {
 
 export default function App() {
   const [view, setView] = useState('analisis')
-  const [history, setHistory] = useState(seedHistory)
+  const [history, setHistory] = useState<SeedEntry[]>(seedHistory)
   const [filter, setFilter] = useState('all')
   const [q, setQ] = useState('')
-  const [modalEntry, setModalEntry] = useState(null)
+  const [modalEntry, setModalEntry] = useState<ReportEntry | null>(null)
   const { toasts, toast } = useToasts()
 
   const onNewEntry = useMemo(
-    () => (entry) => setHistory((prev) => [entry, ...prev]),
+    () => (entry: ReportEntry) => setHistory((prev) => [entry, ...prev]),
     [],
   )
 
@@ -61,7 +88,7 @@ export default function App() {
     return { p, f: total - p, total, avg: fmtPct(avg) }
   }, [history])
 
-  const deleteEntry = (e) => {
+  const deleteEntry = (e: ReportEntry) => {
     setHistory((prev) => prev.filter((x) => x.id !== e.id))
     toast('Entri ' + e.id + ' dihapus.', 'info')
   }
