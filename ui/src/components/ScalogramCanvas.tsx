@@ -9,11 +9,12 @@ interface ScalogramCanvasProps {
   peaksTime: number[]
   klas: string | null
   pre: Float32Array | null
+  cam: Float32Array | null
   emptyMsg: string
   canvasRef?: React.RefObject<HTMLCanvasElement | null>
 }
 
-export default function ScalogramCanvas({ scal, colormap, gradcam, peaksTime, klas, pre, emptyMsg, canvasRef }: ScalogramCanvasProps) {
+export default function ScalogramCanvas({ scal, colormap, gradcam, peaksTime, klas, pre, cam, emptyMsg, canvasRef }: ScalogramCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -31,8 +32,9 @@ export default function ScalogramCanvas({ scal, colormap, gradcam, peaksTime, kl
       peaksTime,
       klas: klas || '',
       pre,
+      cam,
     })
-  }, [scal, colormap, gradcam, peaksTime, klas, pre, emptyMsg])
+  }, [scal, colormap, gradcam, peaksTime, klas, pre, cam, emptyMsg])
 
   const setBoth = (el: HTMLCanvasElement | null) => {
     ref.current = el

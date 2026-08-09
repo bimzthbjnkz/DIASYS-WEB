@@ -12,14 +12,13 @@ function TrainCanvas() {
 }
 
 const ARCH: [string, string, string][] = [
-  ['00', 'Input — scalogram CWT', '224×224×3'],
-  ['01', 'Conv2D 32@3×3 + BN + ReLU + MaxPool', '112×112×32'],
-  ['02', 'Conv2D 64@3×3 + BN + ReLU + MaxPool', '56×56×64'],
-  ['03', 'Conv2D 128@3×3 + BN + ReLU + MaxPool', '28×28×128'],
-  ['04', 'Conv2D 256@3×3 + BN + ReLU + MaxPool', '14×14×256'],
-  ['05', 'GlobalAveragePooling + Dropout 0,4', '256'],
-  ['06', 'Dense 128 + ReLU + Dropout 0,3', '128'],
-  ['07', 'Dense 2 + Softmax → HFpEF / HFrEF', '2'],
+  ['00', 'Input — scalogram CWT mexican-hat · 3 lead (I, II, V5)', '32×2500×3'],
+  ['01', 'Conv2D 32@(3×7) + BN + ReLU + MaxPool (2×4)', '15×623×32'],
+  ['02', 'Conv2D 64@(3×5) + BN + ReLU + MaxPool (2×4)', '6×154×64'],
+  ['03', 'Conv2D 128@(3×3) + BN + ReLU + MaxPool (2×4)', '2×38×128'],
+  ['04', 'GlobalAveragePooling2D', '128'],
+  ['05', 'Dense 64 + ReLU + Dropout 0,5', '64'],
+  ['06', 'Dense 1 + Sigmoid → P(HFpEF)', '1'],
 ]
 
 const METRICS: [string, string, number][] = [
@@ -28,6 +27,9 @@ const METRICS: [string, string, number][] = [
   ['Spesifisitas', '95,6%', 95.6],
   ['AUC-ROC', '0,983', 98.3],
 ]
+
+const METRIC_NOTE =
+  'Metrik dan kurva pada panel ini bersifat ilustratif dari pelatihan EchoNext (kondisi tanpa normalisasi sinyal); nilai aktual ditentukan saat evaluasi set validasi penuh.'
 
 export default function ModelView() {
   useEffect(() => {
@@ -42,19 +44,19 @@ export default function ModelView() {
   const pipeCards = [
     {
       n: '① Preprocessing',
-      p: 'Detrending baseline wander, filter lolos-pita 0,5–40 Hz, notch 50 Hz, kalibrasi unit otomatis, dan pemotongan jendela 10–12 detik.',
+      p: 'Resampling ke 250 Hz, jendela 10 detik (2500 sampel), kalibrasi unit otomatis ke mikrovotl (µV) sesuai format EchoNext.',
       icon: <WaveIcon className="h-5 w-5" />,
       style: { background: 'var(--color-primary-soft)', color: 'var(--color-primary)' },
     },
     {
       n: '② Continuous Wavelet Transform',
-      p: 'Sinyal 1-D dikonversi menjadi scalogram waktu–frekuensi 2-D memakai wavelet Morlet (ω₀ = 6) pada 56 skala geometris ≈ 1–121 Hz.',
+      p: 'Wavelet mexican-hat (pywt.cwt, scales 1–32) pada lead I, II, dan V5 → |koefisien| ditumpuk sebagai 3 kanal: tensor 32×2500×3.',
       icon: <LayersIcon className="h-5 w-5" />,
       style: { background: '#f1ecfe', color: '#7c3aed' },
     },
     {
       n: '③ Inferensi CNN',
-      p: 'Empat blok konvolusional + batch normalization + dropout, diakhiri softmax 2 neuron. Grad-CAM menampilkan peta atensi model.',
+      p: 'Tiga blok Conv2D + batch normalization + max pooling, dilanjutkan global average pooling, dense 64, dan sigmoid 1 neuron (P HFpEF). Grad-CAM dihitung dari lapisan konvolusi terakhir.',
       icon: <GridIcon className="h-5 w-5" />,
       style: { background: 'var(--color-amber-soft)', color: 'var(--color-amber)' },
     },
@@ -65,7 +67,8 @@ export default function ModelView() {
       <div className="page-head mb-[22px]">
         <h1 className="font-display text-[25px] tracking-[-.4px]">Model &amp; Pipeline</h1>
         <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-muted">
-          KardioNet-CNN v2.3 — klasifikasi biner HFpEF vs HFrEF berbasis scalogram CWT dengan interpretabilitas Grad-CAM.
+          EchoNext CNN — klasifikasi biner HFpEF vs HFrEF dari scalogram CWT mexican-hat 3 lead (I, II, V5), dijalankan di
+          browser via TensorFlow.js.
         </p>
       </div>
 
@@ -87,7 +90,7 @@ export default function ModelView() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-[980px]:grid-cols-1">
-        <Card title="Arsitektur Jaringan" hint="≈1,2 juta parameter">
+        <Card title="Arsitektur Jaringan" hint="≈347 ribu parameter">
           <ul className="list-none">
             {ARCH.map(([idx, name, shape]) => (
               <li key={idx} className="flex items-center gap-3 border-b border-[#f0f3f9] px-[2px] py-[10px] text-[12.5px] last:border-b-0">
@@ -98,7 +101,7 @@ export default function ModelView() {
             ))}
           </ul>
           <div className="mt-[14px] flex flex-wrap gap-[7px]">
-            {['Adam lr=3e-4', 'batch=32', '60 epoch', 'early stopping', '5-fold CV', 'augmentasi noise + shift'].map((h) => (
+            {['loss=binary crossentropy', 'optimizer=Adam', 'class weight balanced', 'lead: I, II, V5', 'skala 1–32 · mexh'].map((h) => (
               <span key={h} className="rounded-[8px] border border-line bg-[#f4f6fa] px-[10px] py-1.5 font-mono text-[10.5px] font-semibold text-muted">
                 {h}
               </span>
@@ -106,7 +109,7 @@ export default function ModelView() {
           </div>
         </Card>
 
-        <Card title="Kurva Pelatihan &amp; Evaluasi" hint="validasi silang 5-fold">
+        <Card title="Kurva Pelatihan &amp; Evaluasi" hint="ilustratif">
           <TrainCanvas />
           <div className="divider" />
           <div>
@@ -125,17 +128,8 @@ export default function ModelView() {
             ))}
           </div>
           <div className="divider" />
-          <div className="sec-title">Confusion Matrix (n=1.240)</div>
-          <div className="grid grid-cols-[auto_1fr_1fr] items-center gap-1.5 text-xs">
-            <div />
-            <div className="cm-h">Pred: HFpEF</div>
-            <div className="cm-h">Pred: HFrEF</div>
-            <div className="cm-lbl">Aktual: HFpEF</div>
-            <div className="cm-cell cm-tp">583</div>
-            <div className="cm-cell cm-fp">27</div>
-            <div className="cm-lbl">Aktual: HFrEF</div>
-            <div className="cm-cell cm-fp">40</div>
-            <div className="cm-cell cm-tp">590</div>
+          <div className="mt-3 rounded-[10px] border-l-[3px] border-line2 bg-[#f8f9fd] px-3 py-[10px] text-[11px] leading-[1.6] text-dim">
+            {METRIC_NOTE}
           </div>
         </Card>
       </div>

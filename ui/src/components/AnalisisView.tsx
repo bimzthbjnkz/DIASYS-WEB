@@ -207,6 +207,7 @@ function ScalogramSection({ a }: ScalogramSectionProps) {
         peaksTime={a.peaksTime}
         klas={a.klas}
         pre={a.pre}
+        cam={a.cam}
         emptyMsg="menunggu transformasi CWT…"
         canvasRef={a.scalCanvasRef}
       />
@@ -229,7 +230,7 @@ function ScalogramSection({ a }: ScalogramSectionProps) {
         </label>
       </div>
       <div className="mt-3 font-mono text-[11px] font-medium text-dim">
-        Wavelet Morlet ω₀=6 · 56 skala · pita ≈1–121 Hz
+        Wavelet mexican-hat · 32 skala (1–32) · 3 lead (I, II, V5) · pita ≈2–62 Hz
       </div>
     </Card>
   )
@@ -241,19 +242,19 @@ function PipelineCard() {
       n: '1',
       cls: 'bg-primary-soft text-primary',
       b: 'Preprocessing',
-      p: 'Detrending baseline, bandpass 0,5–40 Hz, notch 50 Hz, kalibrasi unit otomatis.',
+      p: 'Resampling 250 Hz, jendela 10 detik, kalibrasi unit otomatis → µV.',
     },
     {
       n: '2',
       cls: 'bg-[#f1ecfe] text-[#7c3aed]',
       b: 'Transformasi CWT',
-      p: 'Wavelet Morlet ω₀=6 · 56 skala → scalogram waktu–frekuensi.',
+      p: 'Wavelet mexican-hat · 32 skala · 3 lead (I, II, V5) → tensor 32×2500×3.',
     },
     {
       n: '3',
       cls: 'bg-amber-soft text-amber',
       b: 'Inferensi CNN',
-      p: 'KardioNet v2.3 — 4 blok konvolusional, softmax 2 kelas + Grad-CAM.',
+      p: 'EchoNext CNN — 3 blok konvolusional + BN + MaxPool, GAP, sigmoid + Grad-CAM.',
     },
     {
       n: '4',

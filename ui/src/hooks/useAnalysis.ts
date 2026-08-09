@@ -3,7 +3,6 @@ import { sleep } from '../lib/format'
 import {
   absPercentile,
   bestLead,
-  cwtScalogram,
   decode212,
   detectPeaks,
   getSignal,
@@ -13,9 +12,12 @@ import {
   synthECG,
 } from '../lib/ecg'
 import type { Dataset, MeasureResult, PeakResult, ScalResult } from '../lib/ecg'
-import { infer } from '../lib/report'
-import type { InferResult, ReportEntry } from '../lib/report'
+import type { ReportEntry } from '../lib/report'
 import { captureScalogramThumb } from '../lib/draw'
+import { cwtScales } from '../lib/cwtMexh'
+import { buildModelInput, MODEL_FS, MODEL_N, MODEL_SCALES } from '../lib/modelInput'
+import type { ModelInput } from '../lib/modelInput'
+import { computeGradCam, predictModel } from '../lib/model'
 
 interface UseAnalysisParams {
   toast: (msg: string, type?: string) => void
@@ -42,6 +44,7 @@ export interface UseAnalysisReturn {
   peaksIdx: number[]
   peaksTime: number[]
   scal: ScalResult | null
+  cam: Float32Array | null
   klas: string | null
   lastEntry: ReportEntry | null
   colormap: string
@@ -69,6 +72,23 @@ export interface UseAnalysisReturn {
   markStep: (i: number, st: string) => void
 }
 
+function scalFromMexh(mag: Float32Array, fs: number): ScalResult {
+  const smp = Float32Array.from(mag)
+  smp.sort()
+  const p99 = smp[Math.floor(smp.length * 0.99)] || 1
+  return {
+    mag,
+    scales: cwtScales(),
+    T: MODEL_N,
+    ns: MODEL_SCALES,
+    fs,
+    p99,
+    a0: 1,
+    ratio: 1,
+    mode: 'mexh',
+  }
+}
+
 export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalysisReturn {
   const [dataset, setDataset] = useState<Dataset | null>(null)
   const [fs, setFs] = useState(250)
@@ -82,6 +102,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
   const [peaksIdx, setPeaksIdx] = useState<number[]>([])
   const [peaksTime, setPeaksTime] = useState<number[]>([])
   const [scal, setScal] = useState<ScalResult | null>(null)
+  const [cam, setCam] = useState<Float32Array | null>(null)
   const [klas, setKlas] = useState<string | null>(null)
   const [lastEntry, setLastEntry] = useState<ReportEntry | null>(null)
   const [colormap, setColormap] = useState('inferno')
@@ -94,6 +115,8 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
   const scalCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const runRef = useRef(false)
   const seqRef = useRef(5013)
+  const modelTensorRef = useRef<Float32Array | null>(null)
+  const runningRef = useRef(false)
 
   const markStep = useCallback((i: number, st: string) => {
     setSteps((prev) => {
@@ -103,20 +126,25 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     })
   }, [])
 
-  const resetRunUI = useCallback((keepDone: boolean, hasData = !!dataset) => {
-    setSteps((prev) => {
-      const next = [...prev]
-      for (let i = 1; i < 4; i++) next[i] = ''
-      if (!keepDone) next[0] = hasData ? 'done' : ''
-      return next
-    })
-    setProgress(hasData ? 8 : 0)
-    setScal(null)
-    setKlas(null)
-    setPeaksIdx([])
-    setPeaksTime([])
-    setStage(hasData ? 'data siap · klik Jalankan Analisis' : 'siap · menunggu data')
-  }, [dataset])
+  const resetRunUI = useCallback(
+    (keepDone: boolean, hasData = !!dataset) => {
+      setSteps((prev) => {
+        const next = [...prev]
+        for (let i = 1; i < 4; i++) next[i] = ''
+        if (!keepDone) next[0] = hasData ? 'done' : ''
+        return next
+      })
+      setProgress(hasData ? 8 : 0)
+      setScal(null)
+      setCam(null)
+      modelTensorRef.current = null
+      setKlas(null)
+      setPeaksIdx([])
+      setPeaksTime([])
+      setStage(hasData ? 'data siap · klik Jalankan Analisis' : 'siap · menunggu data')
+    },
+    [dataset],
+  )
 
   const unitNote = useMemo(() => {
     if (!dataset) return 'mV'
@@ -199,7 +227,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
 
   const loadSample = useCallback(
     (kind: string) => {
-      if (running) return toast('Tunggu analisis selesai.', 'warn')
+      if (runningRef.current) return toast('Tunggu analisis selesai.', 'warn')
       const sig = synthECG(kind)
       setDataset({
         name: kind === 'hfpEF' ? 'Contoh — Simulasi HFpEF' : 'Contoh — Simulasi HFrEF',
@@ -217,7 +245,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
       resetRunUI(false, true)
       toast('Data contoh dimuat. Klik "Jalankan Analisis".', 'success')
     },
-    [markStep, resetRunUI, running, toast],
+    [markStep, resetRunUI, runningRef, toast],
   )
 
   const clearData = useCallback(() => {
@@ -225,6 +253,8 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     setRaw(null)
     setPre(null)
     setScal(null)
+    setCam(null)
+    modelTensorRef.current = null
     setKlas(null)
     setPeaksIdx([])
     setPeaksTime([])
@@ -234,13 +264,52 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     setRunning(false)
   }, [])
 
+  /* Hapus hasil lama jika lead / sampling rate berubah. */
+  const staleResults = useCallback(() => {
+    setScal(null)
+    setCam(null)
+    modelTensorRef.current = null
+    setKlas(null)
+  }, [])
+
+  const setLeadSafe = useCallback(
+    (l: number) => {
+      setLead(l)
+      staleResults()
+    },
+    [staleResults],
+  )
+
+  const setFsSafe = useCallback(
+    (f: number) => {
+      setFs(f)
+      staleResults()
+    },
+    [staleResults],
+  )
+
+  const setGradcamSafe = useCallback(
+    (g: boolean) => {
+      setGradcam(g)
+      if (g && modelTensorRef.current) {
+        computeGradCam(modelTensorRef.current)
+          .then(setCam)
+          .catch(() => setCam(null))
+      } else if (!g) {
+        setCam(null)
+      }
+    },
+    [],
+  )
+
   const runAnalysis = useCallback(async () => {
-    if (running) return
+    if (runningRef.current) return
     if (!dataset) {
       toast('Unggah atau muat data EKG terlebih dahulu.', 'warn')
       return
     }
     runRef.current = true
+    runningRef.current = true
     setRunning(true)
     resetRunUI(false)
 
@@ -253,9 +322,9 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     markStep(1, 'active')
     setProgress(12)
     setStage('tahap 2/4 · preprocessing sinyal')
-    await sleep(420)
+    await sleep(260)
     setProgress(16)
-    await sleep(360)
+    await sleep(240)
     const y = preprocess(rawSig, rfs)
     const det: PeakResult = detectPeaks(y, rfs)
     const peaks = det.idx
@@ -263,63 +332,90 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     setPeaksTime(peaks.map((i) => i / rfs))
     setPre(y)
     const m: MeasureResult = measure(det.yy, rfs, peaks)
-    const hr = peaks.length > 1 ? Math.round((60 * (peaks.length - 1)) / ((peaks[peaks.length - 1] - peaks[0]) / rfs)) : 0
+    const hr =
+      peaks.length > 1
+        ? Math.round((60 * (peaks.length - 1)) / ((peaks[peaks.length - 1] - peaks[0]) / rfs))
+        : 0
     setHr(hr)
-    await sleep(280)
-    setProgress(20)
+    await sleep(200)
+    setProgress(22)
     markStep(1, 'done')
 
-    /* Tahap 3 — CWT */
+    /* Tahap 3 — CWT mexh (input model, 3 lead) */
     markStep(2, 'active')
-    setStage('tahap 3/4 · transformasi CWT')
-    const scalRes = await cwtScalogram(y, rfs, (p) => {
-      setProgress(20 + p * 42)
-      setStage('tahap 3/4 · CWT ' + (p * 100).toFixed(0) + '%')
-    })
-    setScal(scalRes)
+    setStage('tahap 3/4 · transformasi CWT mexh')
+    setProgress(26)
+    await sleep(120)
+    const mi: ModelInput = buildModelInput(ds, fs, lead)
+    modelTensorRef.current = mi.tensor
+    setScal(scalFromMexh(mi.channels[mi.displayIdx].mag, MODEL_FS))
+    setProgress(46)
+    await sleep(120)
     markStep(2, 'done')
 
     /* Tahap 4 — CNN */
     markStep(3, 'active')
-    setProgress(64)
-    const layers = 6
-    for (let i = 0; i < layers; i++) {
-      setStage('tahap 4/4 · inferensi CNN ' + (i + 1) + '/' + layers + ' …')
-      setProgress(64 + ((i + 1) / layers) * 24)
-      await sleep(200)
-    }
-    const res: InferResult = infer(ds, m, hr)
-    setKlas(res.klas)
+    setProgress(52)
+    setStage('tahap 4/4 · memuat model CNN…')
+    await sleep(100)
+    try {
+      setProgress(64)
+      setStage('tahap 4/4 · inferensi CNN…')
+      const res = await predictModel(mi.tensor)
+      const probs: number[] = [res.pHFpEF, res.pHFrEF]
+      const klas2 = res.pHFpEF >= 0.5 ? 'HFpEF' : 'HFrEF'
+      setKlas(klas2)
 
-    const thumb = captureScalogramThumb(scalRes, y, peaks.map((i) => i / rfs), res.klas)
+      if (gradcam) {
+        setStage('tahap 4/4 · menghitung Grad-CAM…')
+        computeGradCam(mi.tensor)
+          .then(setCam)
+          .catch(() => setCam(null))
+      }
 
-    const entry: ReportEntry = {
-      id: 'CW-' + seqRef.current++,
-      ts: Date.now(),
-      src: ds.name,
-      klas: res.klas,
-      conf: res.conf,
-      probs: res.probs,
-      stats: { hr, amp: m.amp, qrsW: m.qrsW, sdnn: m.sdnn },
-      thumb,
+      const thumb = captureScalogramThumb(
+        scalFromMexh(mi.channels[mi.displayIdx].mag, MODEL_FS),
+        y,
+        peaks.map((i) => i / rfs),
+        klas2,
+      )
+
+      const entry: ReportEntry = {
+        id: 'CW-' + seqRef.current++,
+        ts: Date.now(),
+        src: ds.name,
+        klas: klas2,
+        conf: Math.max(probs[0], probs[1]),
+        probs,
+        stats: { hr, amp: m.amp, qrsW: m.qrsW, sdnn: m.sdnn },
+        thumb,
+      }
+      setLastEntry(entry)
+      onNewEntry?.(entry)
+      setProgress(100)
+      setStage('selesai · ' + klas2 + ' (' + (Math.max(probs[0], probs[1]) * 100).toFixed(1).replace('.', ',') + '%)')
+      markStep(3, 'done')
+      toast(`Analisis selesai — ${klas2} (${(Math.max(probs[0], probs[1]) * 100).toFixed(1).replace('.', ',')}%)`, 'success')
+    } catch (err) {
+      setKlas(null)
+      markStep(3, '')
+      setProgress(46)
+      setStage('gagal · model tidak dapat dipanggil')
+      toast('Gagal menjalankan model CNN: ' + (err instanceof Error ? err.message : String(err)), 'warn')
+    } finally {
+      runRef.current = false
+      runningRef.current = false
+      setRunning(false)
     }
-    setLastEntry(entry)
-    onNewEntry?.(entry)
-    setProgress(100)
-    setStage('selesai · ' + res.klas + ' (' + (res.conf * 100).toFixed(1).replace('.', ',') + '%)')
-    markStep(3, 'done')
-    toast(`Analisis selesai — ${res.klas} (${(res.conf * 100).toFixed(1).replace('.', ',')}%)`, 'success')
-    runRef.current = false
-    setRunning(false)
-  }, [dataset, fs, lead, markStep, onNewEntry, resetRunUI, running, toast])
+  }, [dataset, fs, lead, gradcam, markStep, onNewEntry, resetRunUI, runningRef, toast])
 
   return {
     toast,
     dataset,
     fs,
-    setFs,
+    setFs: setFsSafe,
     lead,
-    setLead,
+    setLead: setLeadSafe,
     running,
     raw,
     pre,
@@ -328,12 +424,13 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     peaksIdx,
     peaksTime,
     scal,
+    cam,
     klas,
     lastEntry,
     colormap,
     setColormap,
     gradcam,
-    setGradcam,
+    setGradcam: setGradcamSafe,
     steps,
     progress,
     stage,

@@ -1,54 +1,10 @@
 import { fmtDate, fmtPct, fmtTime } from './format'
 import { synthECG } from './ecg'
-import type { Dataset, MeasureResult } from './ecg'
 
 export interface InferResult {
   klas: string
   conf: number
   probs: number[]
-}
-
-export function infer(ds: Dataset, m: MeasureResult, hr: number): InferResult {
-  let pF: number
-  if (ds.kind === 'hfref') pF = 0.88 + Math.random() * 0.1
-  else if (ds.kind === 'hfpEF') pF = 0.04 + Math.random() * 0.09
-  else {
-    let s = 0.5
-    s += (0.9 - m.amp) * 0.45
-    s += (m.qrsW - 100) / 160
-    s += (hr - 75) / 300
-    s += (Math.random() - 0.5) * 0.1
-    pF = Math.max(0.08, Math.min(0.92, s))
-  }
-  const probs = [1 - pF, pF]
-  return { klas: pF >= 0.5 ? 'HFrEF' : 'HFpEF', conf: Math.max(probs[0], probs[1]), probs }
-}
-
-export function buildFindings(ds: Dataset, m: MeasureResult, hr: number): string[] {
-  const F: string[] = []
-  F.push(
-    m.amp < 0.85
-      ? `Voltase QRS rendah (${m.amp.toFixed(2).replace('.', ',')} mV) — sering terkait disfungsi sistolik.`
-      : m.amp > 1.15
-        ? `Voltase QRS tinggi (${m.amp.toFixed(2).replace('.', ',')} mV) — sugestif hipertrofi ventrikel kiri.`
-        : `Voltase QRS relatif normal (${m.amp.toFixed(2).replace('.', ',')} mV).`,
-  )
-  F.push(
-    m.qrsW > 110
-      ? `Durasi QRS memanjang (${Math.round(m.qrsW)} ms) — indikasi gangguan konduksi intraventrikular.`
-      : `Durasi QRS dalam batas normal (${Math.round(m.qrsW)} ms).`,
-  )
-  F.push(
-    hr > 95
-      ? `Irama cenderung takikardia (HR ≈ ${hr} bpm).`
-      : hr < 58
-        ? `Irama cenderung bradikardia (HR ≈ ${hr} bpm).`
-        : `Laju jantung normal (HR ≈ ${hr} bpm).`,
-  )
-  if (ds.kind === 'hfpEF') F.push('Morfologi gelombang P lebar/bifid (P mitrale) terdeteksi — khas pada HFpEF.')
-  if (ds.kind === 'hfref') F.push('Segmen ST-T mendatar dengan kecenderungan QT memanjang — khas pada HFrEF.')
-  F.push('Pola energi scalogram cocok dengan distribusi kelas pada data pelatihan CNN.')
-  return F
 }
 
 export interface ReportEntry {
@@ -91,9 +47,9 @@ export function downloadReport(e: ReportEntry): void {
     `  SDNN            : ${Math.round(e.stats.sdnn)} ms`,
     '',
     'METODE',
-    '  Preprocessing : detrending, bandpass 0,5–40 Hz, notch 50 Hz',
-    '  Ekstraksi     : CWT Morlet (ω₀=6), 56 skala',
-    '  Model         : KardioNet-CNN v2.3 (akurasi validasi 94,6%)',
+    '  Preprocessing : resampling 250 Hz, jendela 10 s, unit µV',
+    '  Ekstraksi     : CWT wavelet mexican-hat, 32 skala (1–32), 3 lead (I, II, V5)',
+    '  Model         : EchoNext CNN — 3 blok Conv2D+BN+MaxPool, GAP, Dense 64, sigmoid',
     '',
     'CATATAN: Hasil bersifat pendukung keputusan dan harus',
     'dikonfirmasi oleh dokter spesialis jantung.',

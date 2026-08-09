@@ -18,6 +18,7 @@ export function captureScalogramThumb(
     peaksTime,
     klas,
     pre,
+    cam: null,
   })
   return cnv.toDataURL('image/jpeg', 0.82)
 }
@@ -117,6 +118,11 @@ export function drawECG(
 }
 
 export function siForFreq(sc: ScalResult, f: number): number {
+  if (sc.mode === 'mexh') {
+    // mexh central frequency = 0.25 (normalized). freq = 0.25*fs/scale, index = scale - 1.
+    const scale = (0.25 * sc.fs) / f
+    return scale - 1
+  }
   return Math.log((0.968 * sc.fs) / f / sc.a0) / Math.log(sc.ratio)
 }
 
@@ -127,6 +133,7 @@ interface ScalogramState {
   peaksTime: number[]
   klas: string
   pre: Float32Array | null
+  cam: Float32Array | null
 }
 
 export function renderScalogram(
@@ -135,7 +142,7 @@ export function renderScalogram(
   H: number,
   state: ScalogramState
 ): void {
-  const { scal, colormap, gradcam, peaksTime, klas, pre } = state
+  const { scal, colormap, gradcam, pre, cam } = state
   if (!scal) return
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, W, H)
@@ -168,12 +175,12 @@ export function renderScalogram(
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   ctx.drawImage(off, padL, padT, pw, ph)
-  if (gradcam) drawGradCam(ctx, padL, padT, pw, ph, scal, peaksTime, klas, fs)
+  if (gradcam) drawGradCam(ctx, padL, padT, pw, ph, scal, cam)
   ctx.strokeStyle = '#e2e8f0'
   ctx.strokeRect(padL, padT, pw, ph)
   ctx.fillStyle = '#64748b'
   ctx.font = '14px "JetBrains Mono", monospace'
-  const durSec = (pre ? pre.length : T * 2) / fs
+  const durSec = scal.mode === 'mexh' ? T / fs : (pre ? pre.length : T * 2) / fs
   ctx.textAlign = 'center'
   for (let t = 0; t <= durSec + 0.01; t += 2) ctx.fillText(t + 's', padL + (t / durSec) * pw, H - 13)
   ctx.textAlign = 'right'
@@ -200,54 +207,31 @@ function drawGradCam(
   pw: number,
   ph: number,
   sc: ScalResult,
-  peaksTime: number[],
-  cls: string,
-  fs: number
+  cam: Float32Array | null
 ): void {
   const { T, ns } = sc
-  const cam = document.createElement('canvas')
-  cam.width = T
-  cam.height = ns
-  const c2 = cam.getContext('2d')!
-  c2.globalCompositeOperation = 'lighter'
-  const step = Math.max(2, Math.round(fs / 125))
-  const biOf = (t: number): number => Math.max(0, Math.min(T - 1, Math.round((t * fs) / step)))
-  function blob(
-    bi: number,
-    si: number,
-    rx: number,
-    ry: number,
-    core: string,
-    mid: string
-  ): void {
-    if (si < 0 || si > ns) return
-    c2.save()
-    c2.translate(bi, si)
-    c2.scale(rx, ry)
-    const g = c2.createRadialGradient(0, 0, 0, 0, 0, 1)
-    g.addColorStop(0, core)
-    g.addColorStop(0.55, mid)
-    g.addColorStop(1, 'rgba(0,0,0,0)')
-    c2.fillStyle = g
-    c2.beginPath()
-    c2.arc(0, 0, 1, 0, 7)
-    c2.fill()
-    c2.restore()
-  }
-  for (const tR of peaksTime) {
-    if (cls === 'HFrEF') {
-      blob(biOf(tR), siForFreq(sc, 15), 58, 7, 'rgba(255,235,130,.9)', 'rgba(255,90,40,.45)')
-      blob(biOf(tR + 0.03), siForFreq(sc, 9), 46, 5, 'rgba(255,200,90,.75)', 'rgba(255,80,50,.35)')
-      blob(biOf(tR + 0.36), siForFreq(sc, 5), 40, 4, 'rgba(255,170,90,.55)', 'rgba(230,70,80,.28)')
-    } else {
-      blob(biOf(tR - 0.19), siForFreq(sc, 8), 36, 5, 'rgba(255,235,130,.9)', 'rgba(255,90,40,.45)')
-      blob(biOf(tR - 0.15), siForFreq(sc, 12), 30, 4, 'rgba(255,190,100,.65)', 'rgba(230,70,80,.3)')
-      blob(biOf(tR), siForFreq(sc, 22), 42, 5, 'rgba(255,180,90,.6)', 'rgba(230,70,80,.3)')
+  const heat = document.createElement('canvas')
+  heat.width = T
+  heat.height = ns
+  const hctx = heat.getContext('2d')!
+  const img = hctx.createImageData(T, ns)
+  if (cam && cam.length === T * ns) {
+    for (let si = 0; si < ns; si++) {
+      for (let bi = 0; bi < T; bi++) {
+        const v = Math.max(0, Math.min(1, cam[si * T + bi]))
+        const c = mapColor('jet', v)
+        const idx = (si * T + bi) * 4
+        img.data[idx] = c[0]
+        img.data[idx + 1] = c[1]
+        img.data[idx + 2] = c[2]
+        img.data[idx + 3] = Math.round(200 * v)
+      }
     }
   }
-  ctx.globalAlpha = 0.8
-  ctx.drawImage(cam, padL, padT, pw, ph)
-  ctx.globalAlpha = 1
+  hctx.putImageData(img, 0, 0)
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(heat, padL, padT, pw, ph)
 }
 
 export function drawTraining(cnv: HTMLCanvasElement): void {

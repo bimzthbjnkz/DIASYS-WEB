@@ -1,4 +1,4 @@
-import { toNum } from './format'
+import { toNum } from './format.ts'
 
 /* ---------------- Sintesis sinyal EKG ---------------- */
 export function gauss(t: number, mu: number, s: number): number {
@@ -269,6 +269,8 @@ export interface ScalResult {
   p99: number
   a0: number
   ratio: number
+  /** 'mexh' = model input scalogram (pywt mexican-hat, scales 1..32). */
+  mode?: 'morlet' | 'mexh'
 }
 
 export async function cwtScalogram(
