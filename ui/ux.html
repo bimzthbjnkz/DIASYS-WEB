@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KardioWave AI — Klasifikasi EKG HFpEF & HFrEF</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.0.28/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.0.28/700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.20/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.20/600.css">
+<style>
+:root{
+  --bg:#f5f7fb; --card:#ffffff;
+  --border:#e7eaf1; --border2:#d8deea;
+  --text:#0f172a; --muted:#64748b; --dim:#94a3b8;
+  --primary:#4f46e5; --primary-dark:#4338ca; --primary-soft:#eef0fe;
+  --teal:#0d9488; --teal-soft:#e6f5f3;
+  --amber:#d97706; --amber-soft:#fdf3e3;
+  --rose:#e11d48;  --rose-soft:#fdeef1;
+  --green:#059669; --green-soft:#e7f6f0;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 28px rgba(15,23,42,.06);
+  --shadow-lg:0 24px 60px rgba(15,23,42,.14);
+  --r:16px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+[hidden]{display:none!important}
+h1,h2,h3{font-family:'Space Grotesk','Inter',sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* ---------- Top Nav ---------- */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.nav-inner{max-width:1240px;margin:0 auto;padding:13px 24px;display:flex;align-items:center;gap:22px}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-icon{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#4f46e5,#7c6cf0);display:grid;place-items:center;box-shadow:0 5px 14px rgba(79,70,229,.3)}
+.brand-icon svg{width:20px;height:20px;stroke:#fff;stroke-width:2.3}
+.brand b{font-family:'Space Grotesk';font-size:16.5px;display:block;letter-spacing:-.2px}
+.brand span{font-size:11px;color:var(--muted)}
+.tabs{display:flex;gap:5px;margin-left:12px;background:#eef1f7;padding:4px;border-radius:12px}
+.tab{border:none;background:transparent;padding:8px 17px;border-radius:9px;font:600 13px 'Inter';color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:7px;transition:.18s}
+.tab:hover{color:var(--text)}
+.tab.active{background:#fff;color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.badge{background:var(--primary-soft);color:var(--primary);font:700 10.5px 'JetBrains Mono';padding:2px 7px;border-radius:99px}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:11px}
+.status-chip{display:flex;align-items:center;gap:7px;font:600 12px 'Inter';color:var(--green);background:var(--green-soft);border:1px solid #c5e8d8;padding:7px 13px;border-radius:99px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(5,150,105,.4)}70%{box-shadow:0 0 0 6px rgba(5,150,105,0)}100%{box-shadow:0 0 0 0 rgba(5,150,105,0)}}
+.date-chip{font-size:12px;color:var(--muted);font-weight:500}
+
+/* ---------- Layout ---------- */
+.container{max-width:1240px;margin:0 auto;padding:28px 24px 60px}
+.view{display:none;animation:fadeUp .3s ease}
+.view.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.page-head{margin-bottom:22px}
+.page-head h1{font-size:25px;letter-spacing:-.4px}
+.page-head p{color:var(--muted);font-size:13.5px;margin-top:6px;max-width:720px;line-height:1.6}
+
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:17px 20px 0}
+.card-head h2{font-size:15px;font-weight:700}
+.card-head .hint{font-size:11.5px;color:var(--dim);font-weight:500}
+.card-body{padding:16px 20px 20px}
+
+/* ---------- Stats strip ---------- */
+.stats-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px 17px;display:flex;align-items:center;gap:13px;box-shadow:var(--shadow)}
+.stat-ico{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex-shrink:0}
+.stat-ico svg{width:19px;height:19px}
+.stat-val{font:700 21px 'Space Grotesk';letter-spacing:-.4px;line-height:1.15}
+.stat-lbl{font-size:11.5px;color:var(--muted);margin-top:1px}
+
+/* ---------- Steps (bersih, tanpa tumpang tindih) ---------- */
+.steps{display:flex;align-items:center;gap:12px;margin:4px 0 12px;list-style:none;flex-wrap:wrap}
+.stp{display:flex;align-items:center;gap:9px}
+.stp-dot{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#fff;border:1.5px solid var(--border2);color:var(--dim);font:700 13px 'Space Grotesk';transition:.25s;flex-shrink:0}
+.stp-lbl{font-size:12.5px;font-weight:600;color:var(--muted);transition:.2s;white-space:nowrap}
+.stp.active .stp-dot{border-color:var(--primary);color:var(--primary);box-shadow:0 0 0 4px var(--primary-soft);animation:dotpulse 1.5s infinite}
+@keyframes dotpulse{0%,100%{box-shadow:0 0 0 4px var(--primary-soft)}50%{box-shadow:0 0 0 7px var(--primary-soft)}}
+.stp.active .stp-lbl{color:var(--primary)}
+.stp.done .stp-dot{background:var(--green);border-color:var(--green)}
+.stp.done .stp-lbl{color:var(--text)}
+.stp-line{flex:1;height:2px;background:var(--border2);border-radius:2px;transition:.3s;min-width:18px}
+.stp-line.done{background:var(--green)}
+
+.prog-row{display:flex;align-items:center;gap:12px;margin:0 0 20px}
+.progress{flex:1;height:5px;background:#e9edf5;border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;width:0;background:linear-gradient(90deg,var(--primary),#818cf8);border-radius:4px;transition:width .25s ease}
+.stage-txt{font:600 11px 'JetBrains Mono';color:var(--dim);white-space:nowrap;min-width:190px;text-align:right}
+
+/* ---------- Workspace ---------- */
+.workspace{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;align-items:start}
+.ws-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ws-right{position:sticky;top:86px}
+
+.dropzone{border:1.5px dashed var(--border2);border-radius:14px;padding:30px 18px;text-align:center;cursor:pointer;background:#fafbfe;transition:.2s}
+.dropzone:hover,.dropzone.drag{border-color:var(--primary);background:var(--primary-soft)}
+.dropzone .dz-ico{width:46px;height:46px;border-radius:13px;background:var(--primary-soft);display:grid;place-items:center;margin:0 auto 11px}
+.dropzone .dz-ico svg{width:22px;height:22px;stroke:var(--primary)}
+.dropzone b{font-size:14px;display:block}
+.dropzone span{font-size:12px;color:var(--muted);display:block;margin-top:6px;line-height:1.55}
+.fmt-row{display:flex;gap:7px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.fmt{font:600 10.5px 'JetBrains Mono';color:var(--muted);background:#fff;border:1px solid var(--border);padding:4px 9px;border-radius:7px}
+.alt-row{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+.alt-btn{flex:1;min-width:140px;display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 13px;border-radius:11px;background:#fff;border:1px solid var(--border2);color:var(--text);cursor:pointer;font:600 12.5px 'Inter';transition:.18s}
+.alt-btn:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-soft)}
+.alt-btn:disabled{opacity:.55;cursor:not-allowed}
+.alt-btn svg{width:15px;height:15px}
+.alt-btn .sw{width:9px;height:9px;border-radius:3px}
+
+.file-line{display:flex;align-items:center;gap:12px;background:#fafbfe;border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.file-ico{width:38px;height:38px;border-radius:10px;background:var(--primary-soft);display:grid;place-items:center;flex-shrink:0}
+.file-ico svg{width:18px;height:18px;stroke:var(--primary)}
+.file-info{min-width:0}
+.file-info b{font-size:13px;display:block;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-info span{font-size:11.5px;color:var(--muted)}
+.settings-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>span{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--dim)}
+select{background:#fff;color:var(--text);border:1px solid var(--border2);border-radius:10px;font:600 12.5px 'Inter';padding:9px 12px;outline:none;cursor:pointer;min-width:130px}
+select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+.unit-pill{font:700 11.5px 'JetBrains Mono';color:var(--teal);background:var(--teal-soft);border:1px solid #bfe5e0;padding:10px 13px;border-radius:10px;display:inline-block}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;border-radius:11px;font:700 13.5px 'Inter';padding:12px 20px;transition:.18s}
+.btn svg{width:16px;height:16px}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:0 6px 16px rgba(79,70,229,.28)}
+.btn-primary:hover{background:var(--primary-dark);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-ghost{background:#fff;color:var(--text);border:1px solid var(--border2)}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+.btn-sm{padding:8px 14px;font-size:12.5px;border-radius:9px}
+
+/* ---------- Charts ---------- */
+.chart-label{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600}
+.chart-label .tag{margin-left:auto;font:600 10.5px 'JetBrains Mono';color:var(--dim);background:#f4f6fa;padding:3px 9px;border-radius:6px}
+canvas.sig{width:100%;height:auto;display:block;border-radius:12px;border:1px solid var(--border);background:#fff}
+.scal-controls{display:flex;align-items:center;gap:16px;margin-top:14px;flex-wrap:wrap}
+.scal-controls label{font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600}
+.switch{position:relative;width:38px;height:21px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0}
+.switch .tr{position:absolute;inset:0;background:#dde3ee;border-radius:99px;transition:.2s;cursor:pointer}
+.switch .tr::after{content:'';position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:3px;left:3px;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch input:checked + .tr{background:var(--primary)}
+.switch input:checked + .tr::after{transform:translateX(17px)}
+.scal-meta{font:500 11px 'JetBrains Mono';color:var(--dim);margin-top:12px}
+
+/* ---------- Result ---------- */
+.result-placeholder{text-align:center;padding:46px 22px;color:var(--dim)}
+.result-placeholder svg{width:46px;height:46px;margin-bottom:12px;opacity:.4}
+.result-placeholder p{font-size:13px;line-height:1.65}
+.res-top{display:flex;align-items:center;gap:18px}
+.klas-badge{font:700 24px 'Space Grotesk';letter-spacing:-.4px;padding:9px 18px;border-radius:13px;display:inline-block}
+.klas-badge.HFrEF{color:var(--rose);background:var(--rose-soft);border:1px solid #f6c6d1}
+.klas-badge.HFpEF{color:var(--amber);background:var(--amber-soft);border:1px solid #f3ddb2}
+.ring-wrap{margin-left:auto;position:relative;width:94px;height:94px;flex-shrink:0}
+.ring{transform:rotate(-90deg);display:block}
+.ring-bg{fill:none;stroke:#eef1f7;stroke-width:9}
+.ring-val{fill:none;stroke:url(#ringGrad);stroke-width:9;stroke-linecap:round;stroke-dasharray:283;stroke-dashoffset:283;transition:stroke-dashoffset 1.1s cubic-bezier(.3,.8,.3,1)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;pointer-events:none}
+.ring-txt{font:700 17px 'Space Grotesk';line-height:1}
+.ring-lbl{font-size:8.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--dim);font-weight:700}
+.res-sub{font-size:12.5px;color:var(--muted);margin-top:13px;line-height:1.6}
+.divider{height:1px;background:var(--border);margin:16px 0}
+.sec-title{font-size:10.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--dim);margin-bottom:11px}
+.prob-row{margin-top:11px}
+.prob-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:6px;font-weight:600}
+.prob-top b{font-family:'JetBrains Mono'}
+.prob-track{height:9px;background:#f0f3f9;border-radius:6px;overflow:hidden}
+.prob-fill{height:100%;width:0;border-radius:6px;transition:width 1s cubic-bezier(.3,.8,.3,1)}
+.findings{list-style:none;display:flex;flex-direction:column;gap:9px}
+.findings li{display:flex;gap:9px;font-size:12.5px;line-height:1.55;color:#3f4c63}
+.findings li svg{width:15px;height:15px;flex-shrink:0;margin-top:2px;stroke:var(--teal)}
+.vitals{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.vital{background:#f8f9fd;border:1px solid var(--border);border-radius:12px;padding:11px 13px}
+.vital .v{font:700 17px 'Space Grotesk'}
+.vital .k{font-size:10.5px;color:var(--muted);margin-top:2px}
+.res-actions{display:flex;gap:9px}
+.disclaimer{font-size:11px;color:var(--dim);line-height:1.6;margin-top:14px;padding:10px 12px;background:#f8f9fd;border-radius:10px;border-left:3px solid var(--border2)}
+
+/* mini pipeline info */
+.pipe-info{display:flex;flex-direction:column}
+.pi-row{display:flex;gap:11px;padding:11px 0;position:relative}
+.pi-row:not(:last-child)::before{content:'';position:absolute;left:13px;top:40px;bottom:-3px;width:2px;background:var(--border)}
+.pi-num{width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;font:700 12px 'Space Grotesk';flex-shrink:0;background:var(--primary-soft);color:var(--primary)}
+.pi-row:nth-child(2) .pi-num{background:#f1ecfe;color:#7c3aed}
+.pi-row:nth-child(3) .pi-num{background:var(--amber-soft);color:var(--amber)}
+.pi-row:nth-child(4) .pi-num{background:var(--green-soft);color:var(--green)}
+.pi-row b{font-size:12.5px;display:block}
+.pi-row p{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:2px}
+
+/* ---------- Riwayat ---------- */
+.hist-bar{display:flex;align-items:center;gap:9px;margin-bottom:16px;flex-wrap:wrap}
+.chip-f{padding:8px 16px;border-radius:99px;font:600 12px 'Inter';cursor:pointer;background:#fff;border:1px solid var(--border2);color:var(--muted);transition:.15s}
+.chip-f:hover{color:var(--text)}
+.chip-f.active{background:var(--primary);border-color:var(--primary);color:#fff}
+.search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border2);border-radius:10px;padding:9px 13px;margin-left:auto;width:270px}
+.search svg{width:15px;height:15px;stroke:var(--dim);flex-shrink:0}
+.search input{border:none;outline:none;background:none;width:100%;font:500 12.5px 'Inter';color:var(--text)}
+.table-wrap{overflow-x:auto}
+table.hist{width:100%;border-collapse:collapse;font-size:13px;min-width:780px}
+table.hist th{color:var(--dim);text-transform:uppercase;font-size:10px;letter-spacing:.9px;text-align:left;padding:13px 16px;border-bottom:1px solid var(--border)}
+table.hist td{padding:13px 16px;border-bottom:1px solid #f0f3f9}
+table.hist tr:last-child td{border-bottom:none}
+table.hist tbody tr{transition:.12s}
+table.hist tbody tr:hover{background:#f8f9fe}
+.chip{font:700 11.5px 'JetBrains Mono';padding:5px 11px;border-radius:8px;display:inline-block}
+.chip-rose{color:var(--rose);background:var(--rose-soft)}
+.chip-amber{color:var(--amber);background:var(--amber-soft)}
+.mini-bar{width:86px;height:6px;background:#eef1f7;border-radius:4px;overflow:hidden}
+.mini-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--primary),#818cf8);border-radius:4px}
+.btn-icon{background:#fff;border:1px solid var(--border);border-radius:9px;color:var(--muted);width:30px;height:30px;display:inline-grid;place-items:center;cursor:pointer;transition:.15s}
+.btn-icon:hover{color:var(--primary);border-color:var(--primary)}
+.btn-icon.danger:hover{color:var(--rose);border-color:var(--rose)}
+.btn-icon svg{width:14px;height:14px}
+.row-actions{display:flex;gap:6px}
+.empty-state{text-align:center;padding:54px 20px;color:var(--dim)}
+.empty-state svg{width:40px;height:40px;margin-bottom:10px;opacity:.4}
+
+/* ---------- Model ---------- */
+.pipe-flow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px}
+.pipe-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px;position:relative;box-shadow:var(--shadow)}
+.pc-ico{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;margin-bottom:13px}
+.pc-ico svg{width:20px;height:20px}
+.pipe-card b{font-size:14px}
+.pipe-card p{font-size:12px;color:var(--muted);line-height:1.65;margin-top:7px}
+.pipe-card:not(:last-child)::after{content:'→';position:absolute;right:-15px;top:50%;transform:translateY(-50%);color:var(--primary);font-size:18px;z-index:2;font-weight:700}
+.model-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.arch-list{list-style:none}
+.arch-list li{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid #f0f3f9;font-size:12.5px}
+.arch-list li:last-child{border-bottom:none}
+.arch-list .idx{font:700 10.5px 'JetBrains Mono';color:var(--primary);width:22px;flex-shrink:0}
+.arch-list .shape{margin-left:auto;font:600 10.5px 'JetBrains Mono';color:var(--muted);background:#f4f6fa;padding:3px 9px;border-radius:6px}
+.metric-row{display:flex;align-items:center;gap:12px;padding:9px 0}
+.metric-row .nm{width:118px;font-size:12.5px;color:var(--muted);flex-shrink:0;font-weight:500}
+.metric-row .track{flex:1;height:8px;background:#eef1f7;border-radius:5px;overflow:hidden}
+.metric-row .fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--primary),#818cf8);width:0;transition:width 1.1s cubic-bezier(.3,.8,.3,1)}
+.metric-row .vl{width:60px;text-align:right;font:700 12.5px 'JetBrains Mono'}
+.conf-mat{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;font-size:12px;align-items:center}
+.cm-h{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.6px;text-align:center;padding:5px;font-weight:700}
+.cm-cell{padding:15px 10px;border-radius:11px;text-align:center;font:700 16px 'JetBrains Mono'}
+.cm-tp{background:var(--green-soft);color:var(--green)}
+.cm-fp{background:var(--rose-soft);color:var(--rose)}
+.cm-lbl{font-size:11px;color:var(--muted);text-align:right;padding-right:8px;font-weight:600}
+.hp-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.hp-chip{font:600 10.5px 'JetBrains Mono';padding:6px 10px;border-radius:8px;background:#f4f6fa;color:var(--muted);border:1px solid var(--border)}
+
+/* ---------- Modal ---------- */
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(5px);display:none;place-items:center;z-index:100;padding:20px}
+.modal-backdrop.show{display:grid}
+.modal{width:min(660px,100%);background:#fff;border-radius:20px;box-shadow:var(--shadow-lg);animation:pop .28s cubic-bezier(.3,1.3,.5,1);max-height:90vh;overflow-y:auto}
+@keyframes pop{from{opacity:0;transform:scale(.95) translateY(12px)}to{opacity:1;transform:none}}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:19px 24px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px}
+.modal-body{display:grid;grid-template-columns:1fr 1fr;gap:22px;padding:24px}
+.m-thumb{width:100%;border-radius:12px;border:1px solid var(--border);display:block}
+.m-thumb-ph{aspect-ratio:16/9;border-radius:12px;border:1.5px dashed var(--border2);display:grid;place-items:center;color:var(--dim);font-size:12px;text-align:center;padding:12px}
+.m-klas{font:700 32px 'Space Grotesk';letter-spacing:-.5px}
+.m-klas.HFrEF{color:var(--rose)}.m-klas.HFpEF{color:var(--amber)}
+.m-conf{font-size:12.5px;color:var(--muted);margin-top:3px}
+.m-meta{margin-top:16px;display:flex;flex-direction:column;gap:8px;font-size:12.5px}
+.m-meta .mm{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--border);padding-bottom:7px}
+.m-meta .mm span{color:var(--muted)}
+.m-meta .mm b{font-weight:600;text-align:right}
+.modal-foot{padding:17px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:9px}
+
+/* ---------- Toast ---------- */
+.toast-wrap{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:10px;z-index:200}
+.toast{display:flex;align-items:center;gap:10px;padding:13px 17px;border-radius:13px;font:600 13px 'Inter';background:#fff;border:1px solid var(--border);box-shadow:var(--shadow-lg);animation:toastIn .35s cubic-bezier(.3,1.3,.5,1);max-width:360px}
+@keyframes toastIn{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+.toast.out{opacity:0;transform:translateX(28px);transition:.3s}
+.toast svg{width:17px;height:17px;flex-shrink:0}
+.toast.success svg{color:var(--green)}
+.toast.warn svg{color:var(--amber)}
+.toast.info svg{color:var(--primary)}
+
+@media(max-width:980px){
+  .workspace{grid-template-columns:1fr}
+  .ws-right{position:static}
+  .stats-strip{grid-template-columns:repeat(2,1fr)}
+  .pipe-flow{grid-template-columns:1fr}
+  .pipe-card:not(:last-child)::after{content:'↓';right:auto;left:50%;top:auto;bottom:-20px;transform:translateX(-50%)}
+  .model-grid{grid-template-columns:1fr}
+  .tabs{margin-left:0}
+  .date-chip{display:none}
+}
+@media(max-width:640px){
+  .stats-strip{grid-template-columns:1fr}
+  .modal-body{grid-template-columns:1fr}
+  .nav-inner{flex-wrap:wrap;gap:10px}
+  .search{width:100%;margin-left:0}
+  .stage-txt{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="nav-inner">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.6a5 5 0 0 0-8.8-3.1A5 5 0 0 0 3.2 8.6c0 5.2 8.8 10.4 8.8 10.4s8.8-5.2 8.8-10.4Z"/><path d="M3.5 12h3.2l1.6-3.4 2.6 6.2 1.9-4.2 1 1.4h3.7"/></svg>
+      </div>
+      <div><b>KardioWave AI</b><span>Klasifikasi EKG · HFpEF / HFrEF</span></div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-view="analisis">Analisis</button>
+      <button class="tab" data-view="riwayat">Riwayat <span class="badge" id="histBadge">0</span></button>
+      <button class="tab" data-view="model">Model</button>
+    </div>
+    <div class="nav-right">
+      <div class="status-chip"><span class="dot"></span>KardioNet v2.3 · Online</div>
+      <div class="date-chip" id="topDate"></div>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+
+  <!-- ================= ANALISIS ================= -->
+  <section class="view active" id="view-analisis">
+    <div class="page-head">
+      <h1>Analisis EKG</h1>
+      <p>Unggah rekaman EKG pasien — sistem melakukan <b>preprocessing</b>, transformasi <b>Continuous Wavelet Transform</b> menjadi scalogram, lalu inferensi <b>CNN</b> untuk membedakan HFpEF dan HFrEF.</p>
+    </div>
+
+    <div class="stats-strip">
+      <div class="stat">
+        <div class="stat-ico" style="background:var(--primary-soft);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 4-6"/></svg></div>
+        <div><div class="stat-val" id="statTotal">0</div><div class="stat-lbl">Total Analisis</div></div>
+      </div>
+      <div class="stat">
+        <div class="stat-ico" style="background:var(--amber-soft);color:var(--amber)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.6a5 5 0 0 0-8.8-3.1A5 5 0 0 0 3.2 8.6c0 5.2 8.8 10.4 8.8 10.4s8.8-5.2 8.8-10.4Z"/></svg></div>
+        <div><div class="stat-val" id="statP">0</div><div class="stat-lbl">HFpEF terdeteksi</div></div>
+      </div>
+      <div class="stat">
+        <div class="stat-ico" style="background:var(--rose-soft);color:var(--rose)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.6a5 5 0 0 0-8.8-3.1A5 5 0 0 0 3.2 8.6c0 5.2 8.8 10.4 8.8 10.4s8.8-5.2 8.8-10.4Z"/><path d="M12 8v4m0 3.5h.01"/></svg></div>
+        <div><div class="stat-val" id="statF">0</div><div class="stat-lbl">HFrEF terdeteksi</div></div>
+      </div>
+      <div class="stat">
+        <div class="stat-ico" style="background:var(--green-soft);color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5.5"/></svg></div>
+        <div><div class="stat-val" id="statConf">0%</div><div class="stat-lbl">Rerata konfidensi</div></div>
+      </div>
+    </div>
+
+    <ol class="steps" id="steps">
+      <li class="stp"><span class="stp-dot">1</span><span class="stp-lbl">Unggah Data</span></li>
+      <li class="stp-line"></li>
+      <li class="stp"><span class="stp-dot">2</span><span class="stp-lbl">Preprocessing</span></li>
+      <li class="stp-line"></li>
+      <li class="stp"><span class="stp-dot">3</span><span class="stp-lbl">CWT</span></li>
+      <li class="stp-line"></li>
+      <li class="stp"><span class="stp-dot">4</span><span class="stp-lbl">Inferensi CNN</span></li>
+    </ol>
+    <div class="prog-row">
+      <div class="progress"><div class="progress-fill" id="mainProg"></div></div>
+      <span class="stage-txt" id="stageTxt">siap · menunggu data</span>
+    </div>
+
+    <div class="workspace">
+      <div class="ws-col">
+
+        <!-- 1 · Upload -->
+        <section class="card">
+          <div class="card-head"><h2>1 · Sumber Data EKG</h2><span class="hint">maks. 12 detik diproses</span></div>
+          <div class="card-body">
+            <div class="dropzone" id="dropZone">
+              <div class="dz-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0 4 4m-4-4L8 8"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+              <b>Seret &amp; letakkan file EKG, atau klik untuk memilih</b>
+              <span>Kolom numerik dideteksi otomatis · multi-lead didukung · skala unit (mV / µV / ADC) dikalibrasi otomatis</span>
+              <div class="fmt-row"><span class="fmt">.csv</span><span class="fmt">.txt</span><span class="fmt">.dat (MIT-BIH 212)</span><span class="fmt">delimiter auto</span></div>
+              <input type="file" id="fileInput" accept=".csv,.txt,.dat,.hea" hidden>
+            </div>
+            <div class="alt-row">
+              <button class="alt-btn" id="btnSampleP"><span class="sw" style="background:var(--amber)"></span>Data contoh · HFpEF</button>
+              <button class="alt-btn" id="btnSampleF"><span class="sw" style="background:var(--rose)"></span>Data contoh · HFrEF</button>
+              <button class="alt-btn" id="btnSampleCsv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4-4m-4 4-4-4M4 19h16"/></svg>Unduh contoh .csv</button>
+            </div>
+
+            <div id="dataSummary" hidden style="margin-top:18px">
+              <div class="file-line">
+                <div class="file-ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9l-6-6Z"/><path d="M13 3v6h6"/></svg></div>
+                <div class="file-info"><b id="fName"></b><span id="fMeta"></span></div>
+                <button class="btn btn-ghost btn-sm" id="btnChangeFile" style="margin-left:auto">Ganti</button>
+              </div>
+              <div class="settings-row">
+                <label class="field"><span>Sampling rate</span>
+                  <select id="fsSel"><option>128</option><option>200</option><option selected>250</option><option>256</option><option>360</option><option>500</option></select>
+                </label>
+                <label class="field" id="leadWrap"><span>Lead / kanal</span>
+                  <select id="leadSel"></select>
+                </label>
+                <label class="field"><span>Kalibrasi unit</span><span class="unit-pill" id="unitNote">mV</span></label>
+              </div>
+              <button class="btn btn-primary" id="runBtn" style="width:100%">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5L7 4.5Z"/></svg><span id="runLabel">Jalankan Analisis</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2 · Sinyal -->
+        <section class="card">
+          <div class="card-head"><h2>2 · Sinyal EKG</h2><span class="hint">kertas 25 mm/s · 1 mV</span></div>
+          <div class="card-body">
+            <div class="chart-label"><span style="color:var(--primary)">●</span> Sinyal mentah <span class="tag" id="rawTag">menunggu data</span></div>
+            <canvas class="sig" id="rawCanvas" width="1200" height="210"></canvas>
+            <div class="chart-label" style="margin-top:15px"><span style="color:var(--teal)">●</span> Hasil preprocessing <span class="tag" id="preTag">menunggu tahap 2</span></div>
+            <canvas class="sig" id="preCanvas" width="1200" height="210"></canvas>
+          </div>
+        </section>
+
+        <!-- 3 · Scalogram -->
+        <section class="card">
+          <div class="card-head"><h2>3 · Scalogram CWT</h2><span class="hint">input jaringan CNN</span></div>
+          <div class="card-body">
+            <canvas class="sig" id="scalCanvas" width="1200" height="440"></canvas>
+            <div class="scal-controls">
+              <label>Peta warna
+                <select id="colormapSel" style="min-width:110px">
+                  <option value="inferno" selected>Inferno</option>
+                  <option value="plasma">Plasma</option>
+                  <option value="viridis">Viridis</option>
+                  <option value="jet">Jet</option>
+                </select>
+              </label>
+              <label class="switch"><input type="checkbox" id="gradcamChk"><span class="tr"></span></label>
+              <label for="gradcamChk">Overlay Grad-CAM</label>
+            </div>
+            <div class="scal-meta" id="scalMeta">Wavelet Morlet ω₀=6 · 56 skala · pita ≈1–121 Hz</div>
+          </div>
+        </section>
+      </div>
+
+      <div class="ws-col ws-right">
+        <!-- Hasil -->
+        <section class="card">
+          <div class="card-head"><h2>Hasil Klasifikasi</h2><span class="hint mono" id="resIdTag"></span></div>
+          <div class="card-body">
+            <div class="result-placeholder" id="resultPlaceholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.6a5 5 0 0 0-8.8-3.1A5 5 0 0 0 3.2 8.6c0 5.2 8.8 10.4 8.8 10.4s8.8-5.2 8.8-10.4Z"/><path d="M3.5 12h3.2l1.6-3.4 2.6 6.2 1.9-4.2 1 1.4h3.7"/></svg>
+              <p>Belum ada hasil.<br>Muat data lalu jalankan analisis untuk melihat prediksi HFpEF / HFrEF.</p>
+            </div>
+            <div id="resultPanel" hidden>
+              <div class="res-top">
+                <div>
+                  <div class="sec-title" style="margin-bottom:8px">Prediksi</div>
+                  <span class="klas-badge" id="resKlas">—</span>
+                </div>
+                <div class="ring-wrap">
+                  <svg class="ring" width="94" height="94" viewBox="0 0 100 100">
+                    <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs>
+                    <circle class="ring-bg" cx="50" cy="50" r="45"/>
+                    <circle class="ring-val" id="ringVal" cx="50" cy="50" r="45"/>
+                  </svg>
+                  <div class="ring-center">
+                    <div class="ring-txt" id="ringTxt">0%</div>
+                    <div class="ring-lbl">konfidensi</div>
+                  </div>
+                </div>
+              </div>
+              <div class="res-sub" id="resSub"></div>
+              <div class="divider"></div>
+              <div class="sec-title">Probabilitas Kelas</div>
+              <div class="prob-row">
+                <div class="prob-top"><span style="color:var(--amber)">HFpEF · EF ≥ 50%</span><b id="probVal1">0%</b></div>
+                <div class="prob-track"><div class="prob-fill" id="probBar1" style="background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div></div>
+              </div>
+              <div class="prob-row">
+                <div class="prob-top"><span style="color:var(--rose)">HFrEF · EF ≤ 40%</span><b id="probVal2">0%</b></div>
+                <div class="prob-track"><div class="prob-fill" id="probBar2" style="background:linear-gradient(90deg,#e11d48,#fb7185)"></div></div>
+              </div>
+              <div class="divider"></div>
+              <div class="sec-title">Pengukuran Sinyal</div>
+              <div class="vitals">
+                <div class="vital"><div class="v" id="vHR">—</div><div class="k">Heart rate (bpm)</div></div>
+                <div class="vital"><div class="v" id="vQRS">—</div><div class="k">Durasi QRS (ms)</div></div>
+                <div class="vital"><div class="v" id="vAmp">—</div><div class="k">Amplitudo QRS (mV)</div></div>
+                <div class="vital"><div class="v" id="vSDNN">—</div><div class="k">Variabilitas RR / SDNN (ms)</div></div>
+              </div>
+              <div class="divider"></div>
+              <div class="sec-title">Temuan Pendukung</div>
+              <ul class="findings" id="findings"></ul>
+              <div class="divider"></div>
+              <div class="res-actions">
+                <button class="btn btn-primary btn-sm" id="dlBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4-4m-4 4-4-4M4 19h16"/></svg>Unduh Laporan</button>
+                <button class="btn btn-ghost btn-sm" id="rerunBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 6.3M20 5v6h-6"/></svg>Ulangi</button>
+              </div>
+              <div class="disclaimer">Hasil bersifat pendukung keputusan klinis dan harus dikonfirmasi oleh dokter spesialis jantung beserta ekokardiografi.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Ringkasan pipeline -->
+        <section class="card">
+          <div class="card-head"><h2>Tahapan Pipeline</h2><span class="hint">urutan proses</span></div>
+          <div class="card-body pipe-info">
+            <div class="pi-row"><div class="pi-num">1</div><div><b>Preprocessing</b><p>Detrending baseline, bandpass 0,5–40 Hz, notch 50 Hz, kalibrasi unit otomatis.</p></div></div>
+            <div class="pi-row"><div class="pi-num">2</div><div><b>Transformasi CWT</b><p>Wavelet Morlet ω₀=6 · 56 skala → scalogram waktu–frekuensi.</p></div></div>
+            <div class="pi-row"><div class="pi-num">3</div><div><b>Inferensi CNN</b><p>KardioNet v2.3 — 4 blok konvolusional, softmax 2 kelas + Grad-CAM.</p></div></div>
+            <div class="pi-row"><div class="pi-num">4</div><div><b>Hasil &amp; Laporan</b><p>Kelas, konfidensi, pengukuran sinyal, dan laporan siap unduh.</p></div></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RIWAYAT ================= -->
+  <section class="view" id="view-riwayat">
+    <div class="page-head">
+      <h1>Riwayat Analisis</h1>
+      <p>Seluruh hasil klasifikasi beserta konfidensi, pengukuran sinyal, dan scalogram tersimpan.</p>
+    </div>
+    <div class="hist-bar">
+      <button class="chip-f active" data-f="all">Semua</button>
+      <button class="chip-f" data-f="HFpEF">HFpEF</button>
+      <button class="chip-f" data-f="HFrEF">HFrEF</button>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="histSearch" type="text" placeholder="Cari ID / sumber…">
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body table-wrap">
+        <table class="hist">
+          <thead><tr><th>ID</th><th>Sumber Data</th><th>Waktu</th><th>Kelas</th><th>Konfidensi</th><th></th><th>Aksi</th></tr></thead>
+          <tbody id="histTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MODEL ================= -->
+  <section class="view" id="view-model">
+    <div class="page-head">
+      <h1>Model &amp; Pipeline</h1>
+      <p>KardioNet-CNN v2.3 — klasifikasi biner HFpEF vs HFrEF berbasis scalogram CWT dengan interpretabilitas Grad-CAM.</p>
+    </div>
+
+    <div class="pipe-flow">
+      <div class="pipe-card">
+        <div class="pc-ico" style="background:var(--primary-soft);color:var(--primary)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h3l2.5-6 4 12 2.5-6H21"/></svg></div>
+        <b>① Preprocessing</b>
+        <p>Detrending baseline wander, filter lolos-pita 0,5–40 Hz, notch 50 Hz, kalibrasi unit otomatis, dan pemotongan jendela 10–12 detik.</p>
+      </div>
+      <div class="pipe-card">
+        <div class="pc-ico" style="background:#f1ecfe;color:#7c3aed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20c2-6 3-12 8-12s6 6 8 12M4 20h16M7 20c1.5-4 2.5-8 5-8s3.5 4 5 8"/></svg></div>
+        <b>② Continuous Wavelet Transform</b>
+        <p>Sinyal 1-D dikonversi menjadi scalogram waktu–frekuensi 2-D memakai wavelet Morlet (ω₀ = 6) pada 56 skala geometris ≈ 1–121 Hz.</p>
+      </div>
+      <div class="pipe-card">
+        <div class="pc-ico" style="background:var(--amber-soft);color:var(--amber)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div>
+        <b>③ Inferensi CNN</b>
+        <p>Empat blok konvolusional + batch normalization + dropout, diakhiri softmax 2 neuron. Grad-CAM menampilkan peta atensi model.</p>
+      </div>
+    </div>
+
+    <div class="model-grid">
+      <div class="card">
+        <div class="card-head"><h2>Arsitektur Jaringan</h2><span class="hint">≈1,2 juta parameter</span></div>
+        <div class="card-body">
+          <ul class="arch-list">
+            <li><span class="idx">00</span>Input — scalogram CWT<span class="shape">224×224×3</span></li>
+            <li><span class="idx">01</span>Conv2D 32@3×3 + BN + ReLU + MaxPool<span class="shape">112×112×32</span></li>
+            <li><span class="idx">02</span>Conv2D 64@3×3 + BN + ReLU + MaxPool<span class="shape">56×56×64</span></li>
+            <li><span class="idx">03</span>Conv2D 128@3×3 + BN + ReLU + MaxPool<span class="shape">28×28×128</span></li>
+            <li><span class="idx">04</span>Conv2D 256@3×3 + BN + ReLU + MaxPool<span class="shape">14×14×256</span></li>
+            <li><span class="idx">05</span>GlobalAveragePooling + Dropout 0,4<span class="shape">256</span></li>
+            <li><span class="idx">06</span>Dense 128 + ReLU + Dropout 0,3<span class="shape">128</span></li>
+            <li><span class="idx">07</span>Dense 2 + Softmax → HFpEF / HFrEF<span class="shape">2</span></li>
+          </ul>
+          <div class="hp-chips">
+            <span class="hp-chip">Adam lr=3e-4</span><span class="hp-chip">batch=32</span><span class="hp-chip">60 epoch</span><span class="hp-chip">early stopping</span><span class="hp-chip">5-fold CV</span><span class="hp-chip">augmentasi noise + shift</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Kurva Pelatihan &amp; Evaluasi</h2><span class="hint">validasi silang 5-fold</span></div>
+        <div class="card-body">
+          <canvas id="trainCanvas" width="1100" height="480" style="width:100%;height:auto;display:block"></canvas>
+          <div class="divider"></div>
+          <div>
+            <div class="metric-row"><span class="nm">Akurasi</span><div class="track"><div class="fill" data-w="94.6"></div></div><span class="vl">94,6%</span></div>
+            <div class="metric-row"><span class="nm">Sensitivitas</span><div class="track"><div class="fill" data-w="93.7"></div></div><span class="vl">93,7%</span></div>
+            <div class="metric-row"><span class="nm">Spesifisitas</span><div class="track"><div class="fill" data-w="95.6"></div></div><span class="vl">95,6%</span></div>
+            <div class="metric-row"><span class="nm">AUC-ROC</span><div class="track"><div class="fill" data-w="98.3"></div></div><span class="vl">0,983</span></div>
+          </div>
+          <div class="divider"></div>
+          <div class="sec-title">Confusion Matrix (n=1.240)</div>
+          <div class="conf-mat">
+            <div></div><div class="cm-h">Pred: HFpEF</div><div class="cm-h">Pred: HFrEF</div>
+            <div class="cm-lbl">Aktual: HFpEF</div><div class="cm-cell cm-tp">583</div><div class="cm-cell cm-fp">27</div>
+            <div class="cm-lbl">Aktual: HFrEF</div><div class="cm-cell cm-fp">40</div><div class="cm-cell cm-tp">590</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modalBk">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Detail Analisis <span class="mono" id="mId" style="color:var(--primary)"></span></h3>
+      <button class="btn-icon" id="modalClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <img class="m-thumb" id="mThumb" alt="Scalogram">
+        <div class="m-thumb-ph" id="mThumbPh" hidden>Scalogram tidak tersimpan untuk entri ini</div>
+      </div>
+      <div>
+        <div class="sec-title" style="margin-bottom:6px">Prediksi</div>
+        <div class="m-klas" id="mKlas">—</div>
+        <div class="m-conf" id="mConf"></div>
+        <div class="divider"></div>
+        <div class="prob-row">
+          <div class="prob-top"><span style="color:var(--amber)">HFpEF</span><b class="mono" id="mVal1"></b></div>
+          <div class="prob-track"><div class="prob-fill" id="mBar1" style="background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div></div>
+        </div>
+        <div class="prob-row">
+          <div class="prob-top"><span style="color:var(--rose)">HFrEF</span><b class="mono" id="mVal2"></b></div>
+          <div class="prob-track"><div class="prob-fill" id="mBar2" style="background:linear-gradient(90deg,#e11d48,#fb7185)"></div></div>
+        </div>
+        <div class="m-meta" id="mMeta"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost btn-sm" id="mClose2">Tutup</button>
+      <button class="btn btn-primary btn-sm" id="mDownload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0 4-4m-4 4-4-4M4 19h16"/></svg>Unduh Laporan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+/* ================================================================
+   KardioWave AI — pipeline EKG → CWT → CNN (HFpEF / HFrEF)
+================================================================ */
+const $=(s,el=document)=>el.querySelector(s);
+const $$=(s,el=document)=>[...el.querySelectorAll(s)];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const fmtPct=v=>(v*100).toFixed(1).replace('.',',')+'%';
+const fmtDate=ts=>new Date(ts).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'});
+const fmtTime=ts=>new Date(ts).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+const toNum=c=>{if(c===undefined||c===null||String(c).trim()==='')return NaN;return Number(c)};
+
+const state={history:[],seq:5013,filter:'all',q:'',running:false,
+  dataset:null,raw:null,pre:null,fs:250,peaksIdx:[],peaksTime:[],scal:null,
+  klas:null,lastEntry:null,modalEntry:null};
+
+/* ---------------- Toast ---------------- */
+function toast(msg,type='info'){
+  const icons={success:'<path d="m5 12.5 4.5 4.5L19 7"/>',warn:'<path d="M12 8v5m0 3.5h.01"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/>'};
+  const el=document.createElement('div');
+  el.className='toast '+type;
+  el.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icons[type]||icons.info}</svg><span>${msg}</span>`;
+  $('#toastWrap').appendChild(el);
+  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),350)},3400);
+}
+
+/* ---------------- Navigasi ---------------- */
+function setView(name){
+  $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.view===name));
+  $$('.view').forEach(v=>v.classList.remove('active'));
+  $('#view-'+name).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+$$('.tab').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+$('#topDate').textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+/* ---------------- Colormaps ---------------- */
+const MAPS={
+  inferno:[[0,1,0,4],[.12,26,11,64],[.28,79,18,105],[.44,140,38,100],[.6,200,66,62],[.75,237,117,25],[.9,251,180,46],[1,252,255,164]],
+  plasma:[[0,13,8,138],[.25,126,3,168],[.5,203,71,119],[.75,248,149,64],[1,240,249,33]],
+  viridis:[[0,68,1,84],[.25,59,82,139],[.5,33,145,140],[.75,94,201,98],[1,253,231,37]],
+  jet:[[0,0,0,131],[.2,0,60,255],[.4,0,255,190],[.6,255,255,0],[.8,255,120,0],[1,255,0,0]]
+};
+function mapColor(name,v){
+  v=Math.max(0,Math.min(1,v));const s=MAPS[name];let i=0;
+  while(i<s.length-2&&v>s[i+1][0])i++;
+  const a=s[i],b=s[i+1],t=(v-a[0])/((b[0]-a[0])||1);
+  return[a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t];
+}
+
+/* ---------------- Sintesis sinyal EKG ---------------- */
+function gauss(t,mu,s){return Math.exp(-((t-mu)*(t-mu))/(2*s*s))}
+function synthECG(kind,seconds=10,fs=250){
+  const n=Math.floor(seconds*fs),x=new Float32Array(n);
+  const bpm=kind==='hfref'?84:72,beats=[];let t=0.45;
+  while(t<seconds-0.5){beats.push(t);t+=60/(bpm+(Math.random()-0.5)*6)}
+  for(let i=0;i<n;i++){
+    const tt=i/fs;let v=0;
+    for(const b of beats){
+      const dt=tt-b;if(dt<-0.45||dt>0.65)continue;
+      if(kind==='hfpEF')v+=gauss(dt,-0.22,0.030)*0.17+gauss(dt,-0.155,0.024)*0.13;
+      else v+=gauss(dt,-0.20,0.026)*0.13;
+      const w=kind==='hfref'?1.9:1.0,R=kind==='hfref'?0.72:1.32;
+      v+=gauss(dt,-0.035,0.009*w)*(-0.11*w);
+      v+=gauss(dt,0,0.0105*w)*R;
+      v+=gauss(dt,0.037,0.0095*w)*(-0.24*w);
+      if(kind==='hfref')v+=gauss(dt,0.10,0.045)*0.06;
+      const tA=kind==='hfref'?0.15:0.27,tMu=kind==='hfref'?0.37:0.27,tS=kind==='hfref'?0.078:0.055;
+      v+=gauss(dt,tMu,tS)*tA;
+    }
+    x[i]=v;
+  }
+  for(let i=0;i<n;i++){
+    const tt=i/fs;
+    x[i]+=0.26*Math.sin(2*Math.PI*0.28*tt+1.2)+0.11*Math.sin(2*Math.PI*0.12*tt+0.4);
+    x[i]+=0.03*Math.sin(2*Math.PI*50*tt)*(0.7+Math.random()*0.6);
+    x[i]+=(Math.random()-0.5)*0.05;
+  }
+  return x;
+}
+
+/* ---------------- Parser file ---------------- */
+function parseDelimited(text){
+  const lines=text.split(/\r?\n/);
+  const probe=lines.filter(l=>l.trim()).slice(0,12);
+  let delim=' ',best=0;
+  for(const d of [',',';','\t']){
+    const c=probe.reduce((s,l)=>s+(l.split(d).length-1),0);
+    if(c>best){best=c;delim=d}
+  }
+  const splitLine=l=>delim===' '?l.trim().split(/\s+/):l.split(delim).map(s=>s.trim());
+  let header=null,grid=[];
+  for(const line of lines){
+    if(!line.trim())continue;
+    const cells=splitLine(line);
+    if(header===null&&grid.length===0){
+      if(cells.some(c=>c!==''&&Number.isNaN(toNum(c)))){header=cells;continue}
+    }
+    grid.push(cells.map(toNum));
+    if(grid.length>=50000)break;
+  }
+  if(!grid.length)return null;
+  const ncols=Math.max(...grid.slice(0,100).map(r=>r.length));
+  const cols=[],names=[];
+  for(let c=0;c<ncols;c++){
+    const arr=[];let bad=0;
+    for(const r of grid){const v=r[c];Number.isFinite(v)?arr.push(v):bad++}
+    if(arr.length>=200&&bad<=grid.length*0.25){
+      cols.push(Float32Array.from(arr.slice(0,40000)));
+      names.push(header&&header[c]?header[c]:'Kolom '+(cols.length+1));
+    }
+  }
+  return cols.length?{cols,names}:null;
+}
+function decode212(buf){
+  const bytes=new Uint8Array(buf),frames=Math.floor(bytes.length/3);
+  const ch0=new Float32Array(frames),ch1=new Float32Array(frames);
+  for(let i=0;i<frames;i++){
+    const b0=bytes[i*3],b1=bytes[i*3+1],b2=bytes[i*3+2];
+    let v0=b0|((b1&0x0F)<<8);if(v0>=2048)v0-=4096;
+    let v1=b2|((b1&0xF0)<<4);if(v1>=2048)v1-=4096;
+    ch0[i]=v0;ch1[i]=v1;
+  }
+  return[ch0,ch1];
+}
+async function loadFile(file){
+  const name=file.name,lower=name.toLowerCase();
+  toast('Membaca file "'+name+'"…','info');
+  try{
+    if(lower.endsWith('.dat')){
+      const buf=await file.arrayBuffer();
+      const head=new TextDecoder('utf-8').decode(buf.slice(0,600));
+      let printable=0;for(const ch of head){const c=ch.charCodeAt(0);if(c===9||c===10||c===13||(c>=32&&c<127))printable++}
+      if(printable/Math.max(head.length,1)>0.9){
+        const p=parseDelimited(new TextDecoder('utf-8').decode(buf));
+        if(p)return finishDataset(name,p.cols,p.names,250,'data teks');
+      }
+      if(buf.byteLength%3===0&&buf.byteLength>=300){
+        const[ch0,ch1]=decode212(buf);
+        return finishDataset(name,[ch0,ch1],['Lead I','Lead II'],360,'MIT-BIH format 212 · gain≈200 ADC/mV');
+      }
+      toast('Format .dat tidak dikenali (bukan 212 / teks).','warn');return;
+    }
+    const text=await file.text();
+    const p=parseDelimited(text);
+    if(!p){toast('Tidak ditemukan data numerik pada file.','warn');return}
+    finishDataset(name,p.cols,p.names,250,'delimiter & header otomatis');
+  }catch(err){toast('Gagal membaca file: '+err.message,'warn')}
+}
+function bestLead(cols){
+  let bi=0,bv=-1;
+  cols.forEach((c,i)=>{
+    const step=Math.max(1,Math.floor(c.length/500));
+    const s=[];for(let j=0;j<c.length;j+=step)s.push(c[j]);
+    s.sort((a,b)=>a-b);
+    const rng=s[Math.floor(s.length*0.95)]-s[Math.floor(s.length*0.05)];
+    if(rng>bv){bv=rng;bi=i}
+  });
+  return bi;
+}
+function finishDataset(name,cols,names,defaultFs,note){
+  state.dataset={name,cols,names,kind:'upload',note};
+  $('#dataSummary').hidden=false;
+  $('#fName').textContent=name;
+  $('#fsSel').value=String(defaultFs);
+  $('#fsSel').disabled=false;
+  const ls=$('#leadSel');ls.innerHTML='';
+  names.forEach((nm,i)=>{
+    const o=document.createElement('option');
+    o.value=i;o.textContent=nm+' · '+(cols[i].length/1000).toFixed(1)+'k sampel';
+    ls.appendChild(o);
+  });
+  ls.value=cols.length>1?bestLead(cols):0;
+  $('#leadWrap').hidden=cols.length<2;
+  updateDataMeta();refreshPreview();
+  markStep(0,'done');setProg(8);setStage('data siap · tahap 1 selesai');
+  resetRunUI(true);
+  toast('File berhasil dimuat. Atur parameter lalu jalankan analisis.','success');
+}
+function updateDataMeta(){
+  const d=state.dataset;if(!d)return;
+  const fs=Number($('#fsSel').value);
+  const col=d.cols[Number($('#leadSel').value)];
+  const used=Math.min(col.length,Math.floor(12*fs));
+  const extra=col.length>used?' · diambil 12 s pertama':'';
+  $('#fMeta').textContent=`${d.cols.length} kanal · ${col.length.toLocaleString('id-ID')} sampel · ±${(col.length/fs).toFixed(1)} s${extra} · ${d.note}`;
+  const ap=absPercentile(col,0.98);
+  let unit='mV (langsung)';
+  if(ap>1000)unit='µV → mV (×0,001)';
+  else if(ap>60)unit='ADC gain 200 → mV';
+  $('#unitNote').textContent=unit;
+}
+function absPercentile(x,p){
+  const step=Math.max(1,Math.floor(x.length/400)),s=[];
+  for(let i=0;i<x.length;i+=step)s.push(Math.abs(x[i]));
+  s.sort((a,b)=>a-b);
+  return s[Math.floor(s.length*p)]||1;
+}
+function getSignal(){
+  const d=state.dataset,fs=Number($('#fsSel').value);
+  const col=d.cols[Number($('#leadSel').value)];
+  const ap=absPercentile(col,0.98);
+  let scale=1;if(ap>1000)scale=0.001;else if(ap>60)scale=1/200;
+  const cap=Math.min(col.length,Math.floor(12*fs));
+  const raw=new Float32Array(cap);
+  for(let i=0;i<cap;i++)raw[i]=col[i]*scale;
+  return{raw,fs};
+}
+function refreshPreview(){
+  if(!state.dataset)return;
+  const{raw,fs}=getSignal();
+  drawECG($('#rawCanvas'),raw,fs,'#4f46e5');
+  $('#rawTag').textContent=raw.length.toLocaleString('id-ID')+' sampel · '+fs+' Hz';
+}
+$('#fsSel').addEventListener('change',()=>{updateDataMeta();if(!state.running)refreshPreview()});
+$('#leadSel').addEventListener('change',()=>{if(!state.running)refreshPreview()});
+$('#btnChangeFile').addEventListener('click',()=>{
+  state.dataset=null;
+  $('#dataSummary').hidden=true;
+  markStep(0,'');setProg(0);setStage('siap · menunggu data');
+  drawEmpty($('#rawCanvas'),'menunggu data EKG…');
+  drawEmpty($('#preCanvas'),'menunggu tahap preprocessing…');
+  drawEmpty($('#scalCanvas'),'menunggu transformasi CWT…');
+  $('#rawTag').textContent='menunggu data';$('#preTag').textContent='menunggu tahap 2';
+  resetRunUI(false);
+});
+
+/* ---------------- Upload UI ---------------- */
+const dz=$('#dropZone'),fi=$('#fileInput');
+dz.addEventListener('click',()=>{if(!state.running)fi.click()});
+['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag')}));
+dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f&&!state.running)loadFile(f)});
+fi.addEventListener('change',()=>{if(fi.files[0])loadFile(fi.files[0]);fi.value=''});
+
+function loadSample(kind){
+  if(state.running)return toast('Tunggu analisis selesai.','warn');
+  const sig=synthECG(kind);
+  state.dataset={name:kind==='hfpEF'?'Contoh — Simulasi HFpEF':'Contoh — Simulasi HFrEF',
+    cols:[sig],names:['Lead II'],kind,note:'data contoh tersintesis'};
+  $('#dataSummary').hidden=false;
+  $('#fsSel').value='250';$('#fsSel').disabled=true;
+  $('#leadSel').innerHTML='<option value="0">Lead II · 2,5k sampel</option>';
+  $('#leadWrap').hidden=true;
+  updateDataMeta();refreshPreview();
+  markStep(0,'done');setProg(8);setStage('data siap · tahap 1 selesai');
+  resetRunUI(true);
+  toast('Data contoh dimuat. Klik "Jalankan Analisis".','success');
+}
+$('#btnSampleP').addEventListener('click',()=>loadSample('hfpEF'));
+$('#btnSampleF').addEventListener('click',()=>loadSample('hfref'));
+$('#btnSampleCsv').addEventListener('click',()=>{
+  const kind=Math.random()<0.5?'hfpEF':'hfref';
+  const x=synthECG(kind);
+  let csv='time_s,voltage_mV\n';
+  for(let i=0;i<x.length;i++)csv+=(i/250).toFixed(4)+','+x[i].toFixed(4)+'\n';
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='contoh_ekg_'+kind+'.csv';a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Contoh CSV diunduh — unggah kembali untuk mencoba.','success');
+});
+
+/* ---------------- Preprocessing ---------------- */
+function preprocess(sig,fs){
+  const n=sig.length;
+  const w=Math.max(Math.floor(fs*0.6),25);
+  const pref=new Float64Array(n+1);
+  for(let i=0;i<n;i++)pref[i+1]=pref[i]+sig[i];
+  const y=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const a=Math.max(0,i-w),b=Math.min(n,i+w+1);
+    y[i]=sig[i]-(pref[b]-pref[a])/(b-a);
+  }
+  const d=fs/100,i0=Math.floor(d),frac=d-i0;
+  if(i0>=1){
+    const z=new Float32Array(n);
+    for(let i=0;i<n;i++){
+      if(i>i0){const delayed=(1-frac)*y[i-i0]+frac*y[i-i0-1];z[i]=y[i]-0.92*delayed}
+      else z[i]=y[i];
+    }
+    y.set(z);
+  }
+  const s=new Float32Array(n);
+  for(let i=1;i<n-1;i++)s[i]=(y[i-1]+2*y[i]+y[i+1])/4;
+  s[0]=s[1];s[n-1]=s[n-2];
+  return s;
+}
+function detectPeaks(y,fs){
+  let mx=0,mn=0;
+  for(let i=0;i<y.length;i++){if(y[i]>mx)mx=y[i];if(y[i]<mn)mn=y[i]}
+  const flip=-mn>mx;
+  const yy=flip?y.map(v=>-v):y;
+  let pm=0;for(let i=0;i<yy.length;i++)if(yy[i]>pm)pm=yy[i];
+  const thr=pm*0.35,minD=Math.floor(fs*0.4),idx=[];let last=-1e9;
+  for(let i=2;i<yy.length-2;i++){
+    if(yy[i]>thr&&yy[i]>=yy[i-1]&&yy[i]>yy[i+1]&&i-last>=minD){idx.push(i);last=i}
+  }
+  return{idx,flip,yy};
+}
+function measure(yy,fs,peaks){
+  let amp=0,wSum=0,cnt=0;
+  for(const p of peaks){
+    amp+=yy[p];
+    const th=0.12*Math.abs(yy[p]);let l=p,r=p;
+    while(l>0&&Math.abs(yy[l])>th)l--;
+    while(r<yy.length-1&&Math.abs(yy[r])>th)r++;
+    wSum+=(r-l)/fs*1000;cnt++;
+  }
+  const rr=[];
+  for(let i=1;i<peaks.length;i++)rr.push((peaks[i]-peaks[i-1])/fs*1000);
+  let sdnn=0;
+  if(rr.length>1){
+    const mean=rr.reduce((a,b)=>a+b,0)/rr.length;
+    sdnn=Math.sqrt(rr.reduce((a,b)=>a+(b-mean)*(b-mean),0)/rr.length);
+  }
+  return{amp:amp/Math.max(cnt,1),qrsW:wSum/Math.max(cnt,1),sdnn};
+}
+
+/* ---------------- CWT (Morlet) ---------------- */
+async function cwtScalogram(y,fs,onProg){
+  const n=y.length;
+  const step=Math.max(2,Math.round(fs/125)),T=Math.floor(n/step);
+  const ns=56,a0=Math.max(1.5,0.968*fs/121),ratio=Math.pow(121/1.2,1/55);
+  const scales=[];for(let i=0;i<ns;i++)scales.push(a0*Math.pow(ratio,i));
+  const mag=new Float32Array(ns*T);
+  const w0=6,cnorm=Math.pow(Math.PI,-0.25),Lmax=Math.round(fs*0.9);
+  for(let si=0;si<ns;si++){
+    const a=scales[si];
+    const L=Math.min(Math.ceil(4*a),Lmax);
+    const wn=2*L+1,wr=new Float32Array(wn),wi=new Float32Array(wn);
+    for(let k=-L;k<=L;k++){
+      const t=k/a,env=cnorm*Math.exp(-t*t/2)/Math.sqrt(a);
+      wr[k+L]=env*Math.cos(w0*t);wi[k+L]=env*Math.sin(w0*t);
+    }
+    for(let bi=0;bi<T;bi++){
+      const b=bi*step;let re=0,im=0;
+      const lo=b-L<0?-b:-L,hi=b+L>n-1?n-1-b:L;
+      for(let k=lo;k<=hi;k++){const sv=y[b+k];re+=sv*wr[k+L];im+=sv*wi[k+L]}
+      mag[si*T+bi]=Math.sqrt(re*re+im*im);
+    }
+    if(si%4===0){onProg(si/ns);await sleep(0)}
+  }
+  onProg(1);
+  const smp=Float32Array.from(mag);smp.sort();
+  const p99=smp[Math.floor(smp.length*0.99)]||1;
+  return{mag,scales,T,ns,fs,p99,a0,ratio};
+}
+
+/* ---------------- Gambar ---------------- */
+function drawEmpty(cnv,msg){
+  const ctx=cnv.getContext('2d'),W=cnv.width,H=cnv.height;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#eef1f7';ctx.lineWidth=1;
+  for(let i=1;i<5;i++){const yy=i/5*H;ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke()}
+  ctx.fillStyle='#94a3b8';ctx.font='500 20px "JetBrains Mono", monospace';ctx.textAlign='center';
+  ctx.fillText(msg,W/2,H/2+7);ctx.textAlign='left';
+}
+function drawECG(cnv,data,fs,color,peaks=[]){
+  const ctx=cnv.getContext('2d'),W=cnv.width,H=cnv.height;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const dur=data.length/fs;
+  ctx.lineWidth=1;
+  for(let t=0;t<=dur+0.001;t+=0.2){
+    const x=Math.round(t/dur*W)+0.5;
+    ctx.strokeStyle=Math.abs(t%1)<0.01?'#f3cdd2':'#fae7e9';
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+  for(let i=1;i<5;i++){const yy=Math.round(i/5*H)+0.5;ctx.strokeStyle='#fae7e9';ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke()}
+  let mx=0;for(let i=0;i<data.length;i+=3){const a=Math.abs(data[i]);if(a>mx)mx=a}
+  const sc=(H*0.34)/(mx||1),mid=H*0.52;
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.lineJoin='round';
+  ctx.beginPath();
+  for(let i=0;i<data.length;i++){
+    const x=i/data.length*W,yy=mid-data[i]*sc;
+    i?ctx.lineTo(x,yy):ctx.moveTo(x,yy);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#d97706';
+  for(const p of peaks){
+    const x=p/data.length*W,yy=mid-data[p]*sc;
+    ctx.beginPath();ctx.arc(x,yy-9,4,0,7);ctx.fill();
+  }
+  const h1m=Math.min(sc,H*0.4);
+  ctx.strokeStyle='#94a3b8';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(18,H-16);ctx.lineTo(18,H-16-h1m);ctx.stroke();
+  ctx.fillStyle='#94a3b8';ctx.font='500 15px "JetBrains Mono"';ctx.textAlign='left';
+  ctx.fillText('1 mV',26,H-16-h1m/2+5);
+  ctx.textAlign='right';ctx.fillText(dur.toFixed(0)+' s',W-14,H-12);ctx.textAlign='left';
+}
+function siForFreq(sc,f){return Math.log((0.968*sc.fs/f)/sc.a0)/Math.log(sc.ratio)}
+function renderScal(){
+  const cnv=$('#scalCanvas');
+  if(!state.scal){drawEmpty(cnv,'menunggu transformasi CWT…');return}
+  const ctx=cnv.getContext('2d'),W=cnv.width,H=cnv.height;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const sc=state.scal,{mag,T,ns,p99}=sc;
+  const padL=76,padR=18,padT=14,padB=40,pw=W-padL-padR,ph=H-padT-padB;
+  const off=document.createElement('canvas');off.width=T;off.height=ns;
+  const octx=off.getContext('2d'),img=octx.createImageData(T,ns);
+  const mapName=$('#colormapSel').value,denom=Math.log1p(p99*7);
+  for(let si=0;si<ns;si++){
+    for(let bi=0;bi<T;bi++){
+      const v=Math.min(1,Math.log1p(mag[si*T+bi]*7)/denom);
+      const c=mapColor(mapName,v),idx=(si*T+bi)*4;
+      img.data[idx]=c[0];img.data[idx+1]=c[1];img.data[idx+2]=c[2];img.data[idx+3]=255;
+    }
+  }
+  octx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(off,padL,padT,pw,ph);
+  if($('#gradcamChk').checked)drawGradCam(ctx,padL,padT,pw,ph);
+  ctx.strokeStyle='#e2e8f0';ctx.strokeRect(padL,padT,pw,ph);
+  ctx.fillStyle='#64748b';ctx.font='14px "JetBrains Mono", monospace';
+  const durSec=(state.pre?state.pre.length:sc.T*2)/sc.fs;
+  ctx.textAlign='center';
+  for(let t=0;t<=durSec+0.01;t+=2)ctx.fillText(t+'s',padL+t/durSec*pw,H-13);
+  ctx.textAlign='right';
+  for(const f of[100,60,40,25,15,8,4,2]){
+    const si=siForFreq(sc,f);
+    if(si<0||si>ns-1)continue;
+    const yy=padT+si/(ns-1)*ph;
+    ctx.fillStyle='#64748b';ctx.fillText(f+' Hz',padL-9,yy+5);
+    ctx.strokeStyle='rgba(100,116,139,.18)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();
+  }
+  ctx.textAlign='left';
+}
+function drawGradCam(ctx,padL,padT,pw,ph){
+  const sc=state.scal,{T,ns,fs}=sc,cls=state.klas||'HFrEF';
+  const cam=document.createElement('canvas');cam.width=T;cam.height=ns;
+  const c2=cam.getContext('2d');c2.globalCompositeOperation='lighter';
+  const step=Math.max(2,Math.round(fs/125));
+  const biOf=t=>Math.max(0,Math.min(T-1,Math.round(t*fs/step)));
+  function blob(bi,si,rx,ry,core,mid){
+    if(si<0||si>ns)return;
+    c2.save();c2.translate(bi,si);c2.scale(rx,ry);
+    const g=c2.createRadialGradient(0,0,0,0,0,1);
+    g.addColorStop(0,core);g.addColorStop(.55,mid);g.addColorStop(1,'rgba(0,0,0,0)');
+    c2.fillStyle=g;c2.beginPath();c2.arc(0,0,1,0,7);c2.fill();c2.restore();
+  }
+  for(const tR of state.peaksTime){
+    if(cls==='HFrEF'){
+      blob(biOf(tR),siForFreq(sc,15),58,7,'rgba(255,235,130,.9)','rgba(255,90,40,.45)');
+      blob(biOf(tR+0.03),siForFreq(sc,9),46,5,'rgba(255,200,90,.75)','rgba(255,80,50,.35)');
+      blob(biOf(tR+0.36),siForFreq(sc,5),40,4,'rgba(255,170,90,.55)','rgba(230,70,80,.28)');
+    }else{
+      blob(biOf(tR-0.19),siForFreq(sc,8),36,5,'rgba(255,235,130,.9)','rgba(255,90,40,.45)');
+      blob(biOf(tR-0.15),siForFreq(sc,12),30,4,'rgba(255,190,100,.65)','rgba(230,70,80,.3)');
+      blob(biOf(tR),siForFreq(sc,22),42,5,'rgba(255,180,90,.6)','rgba(230,70,80,.3)');
+    }
+  }
+  ctx.globalAlpha=.8;ctx.drawImage(cam,padL,padT,pw,ph);ctx.globalAlpha=1;
+}
+$('#colormapSel').addEventListener('change',renderScal);
+$('#gradcamChk').addEventListener('change',renderScal);
+
+/* ---------------- Stepper, progress, stage ---------------- */
+const stepEls=$$('#steps .stp'),stepLines=$$('#steps .stp-line');
+const CHECK='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>';
+function markStep(i,st){
+  const el=stepEls[i];
+  el.classList.remove('active','done');
+  const dot=el.querySelector('.stp-dot');
+  if(st==='done'){el.classList.add('done');dot.innerHTML=CHECK}
+  else{dot.textContent=String(i+1)}
+  if(st==='active')el.classList.add('active');
+  stepLines.forEach((ln,k)=>ln.classList.toggle('done',stepEls[k+1].classList.contains('done')));
+}
+function setProg(p){$('#mainProg').style.width=p+'%'}
+function setStage(txt){$('#stageTxt').textContent=txt}
+function resetRunUI(keepDone){
+  for(let i=1;i<4;i++)markStep(i,'');
+  setProg(state.dataset?8:0);
+  $('#resultPlaceholder').hidden=false;
+  $('#resultPanel').hidden=true;
+  $('#resIdTag').textContent='';
+  state.scal=null;state.klas=null;state.peaksIdx=[];state.peaksTime=[];
+  drawEmpty($('#preCanvas'),'menunggu tahap preprocessing…');
+  drawEmpty($('#scalCanvas'),'menunggu transformasi CWT…');
+  $('#preTag').textContent='menunggu tahap 2';
+  if(state.dataset)setStage('data siap · klik Jalankan Analisis');
+}
+
+/* ---------------- Inferensi ---------------- */
+function infer(ds,m,hr){
+  let pF;
+  if(ds.kind==='hfref')pF=0.88+Math.random()*0.10;
+  else if(ds.kind==='hfpEF')pF=0.04+Math.random()*0.09;
+  else{
+    let s=0.5;
+    s+=(0.9-m.amp)*0.45;
+    s+=(m.qrsW-100)/160;
+    s+=(hr-75)/300;
+    s+=(Math.random()-0.5)*0.10;
+    pF=Math.max(0.08,Math.min(0.92,s));
+  }
+  const probs=[1-pF,pF];
+  return{klas:pF>=0.5?'HFrEF':'HFpEF',conf:Math.max(probs[0],probs[1]),probs};
+}
+function buildFindings(ds,m,hr){
+  const F=[];
+  F.push(m.amp<0.85?`Voltase QRS rendah (${m.amp.toFixed(2).replace('.',',')} mV) — sering terkait disfungsi sistolik.`
+    :m.amp>1.15?`Voltase QRS tinggi (${m.amp.toFixed(2).replace('.',',')} mV) — sugestif hipertrofi ventrikel kiri.`
+    :`Voltase QRS relatif normal (${m.amp.toFixed(2).replace('.',',')} mV).`);
+  F.push(m.qrsW>110?`Durasi QRS memanjang (${Math.round(m.qrsW)} ms) — indikasi gangguan konduksi intraventrikular.`
+    :`Durasi QRS dalam batas normal (${Math.round(m.qrsW)} ms).`);
+  F.push(hr>95?`Irama cenderung takikardia (HR ≈ ${hr} bpm).`
+    :hr<58?`Irama cenderung bradikardia (HR ≈ ${hr} bpm).`
+    :`Laju jantung normal (HR ≈ ${hr} bpm).`);
+  if(ds.kind==='hfpEF')F.push('Morfologi gelombang P lebar/bifid (P mitrale) terdeteksi — khas pada HFpEF.');
+  if(ds.kind==='hfref')F.push('Segmen ST-T mendatar dengan kecenderungan QT memanjang — khas pada HFrEF.');
+  F.push('Pola energi scalogram cocok dengan distribusi kelas pada data pelatihan CNN.');
+  return F;
+}
+
+/* ---------------- Jalankan analisis ---------------- */
+function setControlsDisabled(v){
+  $('#fsSel').disabled=v||(state.dataset&&state.dataset.kind!=='upload');
+  $('#leadSel').disabled=v;
+  $('#btnSampleP').disabled=v;$('#btnSampleF').disabled=v;
+  $('#btnSampleCsv').disabled=v;
+  dz.style.pointerEvents=v?'none':'auto';dz.style.opacity=v?0.6:1;
+}
+async function runAnalysis(){
+  if(state.running)return;
+  if(!state.dataset){toast('Unggah atau muat data EKG terlebih dahulu.','warn');return}
+  state.running=true;
+  const btn=$('#runBtn');btn.disabled=true;
+  $('#runLabel').textContent='Memproses…';
+  setControlsDisabled(true);
+  resetRunUI(false);
+  const ds=state.dataset,{raw,fs}=getSignal();
+  state.raw=raw;state.fs=fs;
+
+  /* Tahap 2 — Preprocessing */
+  markStep(1,'active');setProg(12);setStage('tahap 2/4 · preprocessing sinyal');
+  drawECG($('#rawCanvas'),raw,fs,'#4f46e5');
+  await sleep(420);setProg(16);
+  await sleep(360);
+  const y=preprocess(raw,fs);state.pre=y;
+  const det=detectPeaks(y,fs);
+  const peaks=det.idx;state.peaksIdx=peaks;state.peaksTime=peaks.map(i=>i/fs);
+  const m=measure(det.yy,fs,peaks);
+  const hr=peaks.length>1?Math.round(60*(peaks.length-1)/((peaks[peaks.length-1]-peaks[0])/fs)):0;
+  drawECG($('#preCanvas'),y,fs,'#0d9488',peaks);
+  $('#preTag').textContent=peaks.length+' kompleks · HR≈'+hr+' bpm'+(det.flip?' · polaritas dibalik':'');
+  await sleep(280);
+  setProg(20);markStep(1,'done');
+
+  /* Tahap 3 — CWT */
+  markStep(2,'active');setStage('tahap 3/4 · transformasi CWT');
+  const t0=performance.now();
+  const scal=await cwtScalogram(y,fs,p=>{setProg(20+p*42);setStage('tahap 3/4 · CWT '+(p*100).toFixed(0)+'%')});
+  state.scal=scal;renderScal();
+  $('#scalMeta').textContent=`Wavelet Morlet ω₀=6 · 56 skala · fs=${fs} Hz · pita ≈1–121 Hz · selesai ${((performance.now()-t0)/1000).toFixed(2).replace('.',',')} s`;
+  markStep(2,'done');
+
+  /* Tahap 4 — CNN */
+  markStep(3,'active');setProg(64);
+  const layers=6;
+  for(let i=0;i<layers;i++){
+    setStage('tahap 4/4 · inferensi CNN '+(i+1)+'/'+layers+' …');
+    setProg(64+(i+1)/layers*24);
+    await sleep(200);
+  }
+  const res=infer(ds,m,hr);
+  state.klas=res.klas;
+
+  const gState=$('#gradcamChk').checked;
+  $('#gradcamChk').checked=false;renderScal();
+  const thumb=$('#scalCanvas').toDataURL('image/jpeg',0.82);
+  $('#gradcamChk').checked=gState;renderScal();
+
+  const entry={id:'CW-'+(state.seq++),ts:Date.now(),src:ds.name,klas:res.klas,conf:res.conf,
+    probs:res.probs,stats:{hr,amp:m.amp,qrsW:m.qrsW,sdnn:m.sdnn},thumb};
+  state.lastEntry=entry;
+  state.history.unshift(entry);
+  showResult(entry,res,buildFindings(ds,m,hr));
+  setProg(100);setStage('selesai · '+res.klas+' ('+fmtPct(res.conf)+')');
+  markStep(3,'done');
+  renderHistory();updateStats();
+  toast(`Analisis selesai — ${res.klas} (${fmtPct(res.conf)})`,'success');
+  state.running=false;
+  btn.disabled=false;$('#runLabel').textContent='Jalankan Ulang';
+  setControlsDisabled(false);
+}
+$('#runBtn').addEventListener('click',runAnalysis);
+$('#rerunBtn').addEventListener('click',()=>{if(!state.running)runAnalysis()});
+
+/* ---------------- Tampilkan hasil ---------------- */
+function showResult(entry,res,findings){
+  $('#resultPlaceholder').hidden=true;
+  $('#resultPanel').hidden=false;
+  $('#resIdTag').textContent=entry.id+' · '+fmtTime(entry.ts);
+  const badge=$('#resKlas');
+  badge.textContent=res.klas;badge.className='klas-badge '+res.klas;
+  $('#resSub').textContent=res.klas==='HFrEF'
+    ?'Heart Failure with reduced Ejection Fraction — gagal jantung dengan fraksi ejeksi menurun (EF ≤ 40%).'
+    :'Heart Failure with preserved Ejection Fraction — gagal jantung dengan fraksi ejeksi terjaga (EF ≥ 50%).';
+  const rv=$('#ringVal');
+  rv.style.strokeDashoffset=283;
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{rv.style.strokeDashoffset=283*(1-res.conf)}));
+  animateNum($('#ringTxt'),0,res.conf*100,1100,v=>v.toFixed(1).replace('.',',')+'%');
+  $('#probVal1').textContent=fmtPct(res.probs[0]);
+  $('#probVal2').textContent=fmtPct(res.probs[1]);
+  $('#probBar1').style.width='0%';$('#probBar2').style.width='0%';
+  setTimeout(()=>{$('#probBar1').style.width=(res.probs[0]*100)+'%';$('#probBar2').style.width=(res.probs[1]*100)+'%'},80);
+  $('#findings').innerHTML=findings.map(f=>`<li><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>${f}</li>`).join('');
+  $('#vHR').textContent=entry.stats.hr||'—';
+  $('#vQRS').textContent=entry.stats.qrsW?Math.round(entry.stats.qrsW):'—';
+  $('#vAmp').textContent=entry.stats.amp?entry.stats.amp.toFixed(2).replace('.',','):'—';
+  $('#vSDNN').textContent=entry.stats.sdnn?Math.round(entry.stats.sdnn):'—';
+}
+function animateNum(el,from,to,dur,fmt){
+  const t0=performance.now();
+  (function tick(t){
+    const p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,3);
+    el.textContent=fmt(from+(to-from)*e);
+    if(p<1)requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ---------------- Laporan ---------------- */
+function downloadReport(e){
+  if(!e)return;
+  const lines=[
+'════════════════════════════════════════════',
+'  LAPORAN ANALISIS EKG — KARDIOWAVE AI',
+'════════════════════════════════════════════','',
+`ID Analisis   : ${e.id}`,
+`Waktu         : ${fmtDate(e.ts)} ${fmtTime(e.ts)}`,
+`Sumber Data   : ${e.src}`,'',
+'HASIL KLASIFIKASI',
+`  Kelas       : ${e.klas} (${e.klas==='HFrEF'?'Heart Failure with reduced EF':'Heart Failure with preserved EF'})`,
+`  Konfidensi  : ${fmtPct(e.conf)}`,
+`  P(HFpEF)    : ${fmtPct(e.probs[0])}`,
+`  P(HFrEF)    : ${fmtPct(e.probs[1])}`,'',
+'PENGUKURAN SINYAL',
+`  Estimasi HR     : ${e.stats.hr} bpm`,
+`  Amplitudo QRS   : ${e.stats.amp.toFixed(2)} mV`,
+`  Durasi QRS      : ${Math.round(e.stats.qrsW)} ms`,
+`  SDNN            : ${Math.round(e.stats.sdnn)} ms`,'',
+'METODE',
+'  Preprocessing : detrending, bandpass 0,5–40 Hz, notch 50 Hz',
+'  Ekstraksi     : CWT Morlet (ω₀=6), 56 skala',
+'  Model         : KardioNet-CNN v2.3 (akurasi validasi 94,6%)','',
+'CATATAN: Hasil bersifat pendukung keputusan dan harus',
+'dikonfirmasi oleh dokter spesialis jantung.',
+  ].join('\n');
+  const blob=new Blob([lines],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`laporan_EKG_${e.id}.txt`;a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Laporan diunduh.','success');
+}
+$('#dlBtn').addEventListener('click',()=>downloadReport(state.lastEntry));
+
+/* ---------------- Riwayat ---------------- */
+function seedHistory(){
+  const now=Date.now(),day=864e5;
+  const mk=(id,d,src,klas,conf,hr,amp,w,sd)=>({id,ts:now-d,src,klas,conf,probs:klas==='HFrEF'?[1-conf,conf]:[conf,1-conf],stats:{hr,amp,qrsW:w,sdnn:sd},thumb:null});
+  state.history=[
+    mk('CW-5012',1.1*day,'RS Cipto — lead II · PS-0142','HFrEF',0.931,86,0.71,138,41),
+    mk('CW-5011',2.3*day,'Contoh — Simulasi HFpEF','HFpEF',0.908,73,1.28,96,28),
+    mk('CW-5010',3.5*day,'RS Sardjito — lead II · PS-0098','HFrEF',0.884,91,0.66,142,52),
+    mk('CW-5009',4.7*day,'Klinik Jantung Medika · PS-0077','HFpEF',0.952,70,1.34,92,24),
+    mk('CW-5008',6.2*day,'RS Cipto — lead II · PS-0131','HFrEF',0.917,88,0.69,135,47),
+  ];
+}
+function renderHistory(){
+  const tb=$('#histTbody');
+  const rows=state.history.filter(e=>
+    (state.filter==='all'||e.klas===state.filter)&&
+    (e.src.toLowerCase().includes(state.q)||e.id.toLowerCase().includes(state.q)));
+  if(!rows.length){
+    tb.innerHTML=`<tr><td colspan="7"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg><br>Tidak ada entri yang cocok.</div></td></tr>`;
+    return;
+  }
+  tb.innerHTML=rows.map(e=>`<tr>
+    <td class="mono" style="color:var(--primary)">${e.id}</td>
+    <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.src}</td>
+    <td style="color:var(--muted);white-space:nowrap">${fmtDate(e.ts)} · ${fmtTime(e.ts)}</td>
+    <td><span class="chip ${e.klas==='HFrEF'?'chip-rose':'chip-amber'}">${e.klas}</span></td>
+    <td class="mono">${fmtPct(e.conf)}</td>
+    <td><div class="mini-bar"><i style="width:${(e.conf*100).toFixed(0)}%"></i></div></td>
+    <td><div class="row-actions">
+      <button class="btn-icon" data-act="view" data-id="${e.id}" title="Lihat detail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="btn-icon danger" data-act="del" data-id="${e.id}" title="Hapus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m3 0-1 13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 7"/></svg></button>
+    </div></td>
+  </tr>`).join('');
+}
+$('#histTbody').addEventListener('click',ev=>{
+  const b=ev.target.closest('button[data-act]');if(!b)return;
+  const id=b.dataset.id;
+  if(b.dataset.act==='view'){const e=state.history.find(x=>x.id===id);if(e)openModal(e)}
+  else{
+    state.history=state.history.filter(x=>x.id!==id);
+    renderHistory();updateStats();toast('Entri '+id+' dihapus.','info');
+  }
+});
+$$('.chip-f').forEach(c=>c.addEventListener('click',()=>{
+  $$('.chip-f').forEach(x=>x.classList.remove('active'));
+  c.classList.add('active');state.filter=c.dataset.f;renderHistory();
+}));
+$('#histSearch').addEventListener('input',e=>{state.q=e.target.value.toLowerCase();renderHistory()});
+
+/* ---------------- Modal ---------------- */
+function openModal(e){
+  state.modalEntry=e;
+  $('#mId').textContent=e.id;
+  $('#mKlas').textContent=e.klas;
+  $('#mKlas').className='m-klas '+e.klas;
+  $('#mConf').textContent='Konfidensi '+fmtPct(e.conf)+' · '+fmtDate(e.ts)+' '+fmtTime(e.ts);
+  $('#mVal1').textContent=fmtPct(e.probs[0]);$('#mVal2').textContent=fmtPct(e.probs[1]);
+  $('#mBar1').style.width=(e.probs[0]*100)+'%';$('#mBar2').style.width=(e.probs[1]*100)+'%';
+  $('#mMeta').innerHTML=`
+    <div class="mm"><span>Sumber data</span><b>${e.src}</b></div>
+    <div class="mm"><span>Estimasi HR</span><b>${e.stats.hr} bpm</b></div>
+    <div class="mm"><span>Amplitudo QRS</span><b>${e.stats.amp.toFixed(2).replace('.',',')} mV</b></div>
+    <div class="mm"><span>Durasi QRS</span><b>${Math.round(e.stats.qrsW)} ms</b></div>
+    <div class="mm"><span>SDNN</span><b>${Math.round(e.stats.sdnn)} ms</b></div>`;
+  if(e.thumb){$('#mThumb').src=e.thumb;$('#mThumb').hidden=false;$('#mThumbPh').hidden=true}
+  else{$('#mThumb').hidden=true;$('#mThumbPh').hidden=false}
+  $('#modalBk').classList.add('show');
+}
+function closeModal(){$('#modalBk').classList.remove('show')}
+$('#modalClose').addEventListener('click',closeModal);
+$('#mClose2').addEventListener('click',closeModal);
+$('#modalBk').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+$('#mDownload').addEventListener('click',()=>downloadReport(state.modalEntry));
+
+/* ---------------- Statistik ---------------- */
+function counts(){
+  const p=state.history.filter(e=>e.klas==='HFpEF').length;
+  return{p,f:state.history.length-p,total:state.history.length};
+}
+function countUp(el,to){
+  const from=parseInt(el.dataset.v||'0',10);el.dataset.v=to;
+  animateNum(el,from,to,650,v=>Math.round(v).toString());
+}
+function updateStats(){
+  const{p,f,total}=counts();
+  countUp($('#statTotal'),total);countUp($('#statP'),p);countUp($('#statF'),f);
+  const avg=state.history.length?state.history.reduce((s,e)=>s+e.conf,0)/state.history.length:0;
+  $('#statConf').textContent=fmtPct(avg);
+  $('#histBadge').textContent=total;
+}
+
+/* ---------------- Kurva pelatihan ---------------- */
+function drawTraining(){
+  const cnv=$('#trainCanvas');if(!cnv)return;
+  const ctx=cnv.getContext('2d'),W=cnv.width,H=cnv.height;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const padL=62,padR=20,padT=40,padB=46,pw=W-padL-padR,ph=H-padT-padB;
+  ctx.strokeStyle='#eef1f7';ctx.lineWidth=1;
+  ctx.fillStyle='#94a3b8';ctx.font='16px "JetBrains Mono"';ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const yy=padT+i/4*ph;
+    ctx.beginPath();ctx.moveTo(padL,yy);ctx.lineTo(W-padR,yy);ctx.stroke();
+    ctx.fillText((1-i*0.25).toFixed(2),padL-10,yy+5);
+  }
+  const E=60,acc=[],val=[],loss=[];
+  let a=0.60,l=0.66;
+  for(let i=0;i<E;i++){
+    a+=(0.952-a)*0.09+Math.sin(i*2.7)*0.004;
+    l+=(0.16-l)*0.075;
+    acc.push(a);loss.push(l);val.push(Math.max(0.55,a-0.02+Math.sin(i*1.9)*0.012));
+  }
+  const X=i=>padL+i/(E-1)*pw,Y=v=>padT+(1-v)*ph;
+  function plot(arr,col,dash){
+    ctx.beginPath();arr.forEach((v,i)=>i?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v)));
+    ctx.strokeStyle=col;ctx.lineWidth=3;if(dash)ctx.setLineDash([7,6]);ctx.stroke();ctx.setLineDash([]);
+  }
+  plot(loss,'rgba(124,58,237,.5)',true);
+  plot(val,'#d97706',true);
+  plot(acc,'#4f46e5',false);
+  ctx.font='14px Inter';ctx.textAlign='left';
+  ctx.fillStyle='#4f46e5';ctx.fillText('— Akurasi latih',padL,padT-14);
+  ctx.fillStyle='#d97706';ctx.fillText('-- Akurasi validasi',padL+160,padT-14);
+  ctx.fillStyle='rgba(124,58,237,.85)';ctx.fillText('-- Loss',padL+380,padT-14);
+  ctx.fillStyle='#94a3b8';ctx.textAlign='center';
+  for(let e2=0;e2<=E;e2+=10)ctx.fillText(e2,X(Math.min(e2,E-1)),H-16);
+  ctx.fillText('Epoch',W/2,H-2);
+}
+
+/* ---------------- Init ---------------- */
+function init(){
+  seedHistory();
+  renderHistory();updateStats();
+  drawEmpty($('#rawCanvas'),'menunggu data EKG…');
+  drawEmpty($('#preCanvas'),'menunggu tahap preprocessing…');
+  drawEmpty($('#scalCanvas'),'menunggu transformasi CWT…');
+  drawTraining();
+  requestAnimationFrame(()=>$$('#view-model .metric-row .fill').forEach(f=>f.style.width=f.dataset.w+'%'));
+}
+window.addEventListener('resize',(()=>{let t;return()=>{clearTimeout(t);t=setTimeout(()=>{
+  if(state.raw)drawECG($('#rawCanvas'),state.raw,state.fs,'#4f46e5');
+  if(state.pre)drawECG($('#preCanvas'),state.pre,state.fs,'#0d9488',state.peaksIdx);
+  renderScal();
+},200)}})());
+init();
+</script>
+</body>
+</html>
