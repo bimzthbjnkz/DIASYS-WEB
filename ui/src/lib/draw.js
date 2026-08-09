@@ -1,5 +1,21 @@
 import { mapColor } from './colormaps.js'
 
+export function captureScalogramThumb(scal, pre, peaksTime, klas) {
+  const cnv = document.createElement('canvas')
+  cnv.width = 1200
+  cnv.height = 440
+  const ctx = cnv.getContext('2d')
+  renderScalogram(ctx, cnv, cnv.width, cnv.height, {
+    scal,
+    colormap: 'inferno',
+    gradcam: false,
+    peaksTime,
+    klas,
+    pre,
+  })
+  return cnv.toDataURL('image/jpeg', 0.82)
+}
+
 export function drawEmpty(cnv, msg) {
   const ctx = cnv.getContext('2d')
   const W = cnv.width

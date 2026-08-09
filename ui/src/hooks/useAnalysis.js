@@ -13,6 +13,7 @@ import {
   synthECG,
 } from '../lib/ecg.js'
 import { infer } from '../lib/report.js'
+import { captureScalogramThumb } from '../lib/draw.js'
 
 export function useAnalysis({ toast, onNewEntry }) {
   const [dataset, setDataset] = useState(null)
@@ -48,23 +49,20 @@ export function useAnalysis({ toast, onNewEntry }) {
     })
   }, [])
 
-  const resetRunUI = useCallback(
-    (keepDone) => {
-      setSteps((prev) => {
-        const next = [...prev]
-        for (let i = 1; i < 4; i++) next[i] = ''
-        if (!keepDone) next[0] = dataset ? 'done' : ''
-        return next
-      })
-      setProgress(dataset ? 8 : 0)
-      setScal(null)
-      setKlas(null)
-      setPeaksIdx([])
-      setPeaksTime([])
-      setStage(dataset ? 'data siap · klik Jalankan Analisis' : 'siap · menunggu data')
-    },
-    [dataset],
-  )
+  const resetRunUI = useCallback((keepDone, hasData = !!dataset) => {
+    setSteps((prev) => {
+      const next = [...prev]
+      for (let i = 1; i < 4; i++) next[i] = ''
+      if (!keepDone) next[0] = hasData ? 'done' : ''
+      return next
+    })
+    setProgress(hasData ? 8 : 0)
+    setScal(null)
+    setKlas(null)
+    setPeaksIdx([])
+    setPeaksTime([])
+    setStage(hasData ? 'data siap · klik Jalankan Analisis' : 'siap · menunggu data')
+  }, [dataset])
 
   const unitNote = useMemo(() => {
     if (!dataset) return 'mV'
@@ -93,7 +91,7 @@ export function useAnalysis({ toast, onNewEntry }) {
       setProgress(8)
       setStage('data siap · tahap 1 selesai')
       setRunning(false)
-      resetRunUI(false)
+      resetRunUI(false, true)
       toast('File berhasil dimuat. Atur parameter lalu jalankan analisis.', 'success')
     },
     [markStep, resetRunUI, toast],
@@ -155,7 +153,7 @@ export function useAnalysis({ toast, onNewEntry }) {
       setProgress(8)
       setStage('data siap · tahap 1 selesai')
       setRunning(false)
-      resetRunUI(false)
+      resetRunUI(false, true)
       toast('Data contoh dimuat. Klik "Jalankan Analisis".', 'success')
     },
     [markStep, resetRunUI, running, toast],
@@ -232,11 +230,7 @@ export function useAnalysis({ toast, onNewEntry }) {
     const res = infer(ds, m, hr)
     setKlas(res.klas)
 
-    const gState = gradcam
-    setGradcam(false)
-    await sleep(50)
-    const thumb = scalCanvasRef.current ? scalCanvasRef.current.toDataURL('image/jpeg', 0.82) : null
-    setGradcam(gState)
+    const thumb = captureScalogramThumb(scalRes, y, peaks.map((i) => i / rfs), res.klas)
 
     const entry = {
       id: 'CW-' + seqRef.current++,
@@ -256,7 +250,7 @@ export function useAnalysis({ toast, onNewEntry }) {
     toast(`Analisis selesai — ${res.klas} (${(res.conf * 100).toFixed(1).replace('.', ',')}%)`, 'success')
     runRef.current = false
     setRunning(false)
-  }, [dataset, fs, lead, gradcam, markStep, onNewEntry, resetRunUI, running, toast])
+  }, [dataset, fs, lead, markStep, onNewEntry, resetRunUI, running, toast])
 
   return {
     toast,
