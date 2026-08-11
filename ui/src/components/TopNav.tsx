@@ -22,7 +22,7 @@ export default function TopNav({ view, setView, histCount }: TopNavProps) {
             <HeartIcon path="M3.5 12h3.2l1.6-3.4 2.6 6.2 1.9-4.2 1 1.4h3.7" className="h-5 w-5 stroke-white stroke-[2.3]" />
           </div>
           <div>
-            <b className="font-display block text-[16.5px] tracking-[-.2px]">KardioWave AI</b>
+            <b className="font-display block text-[16.5px] tracking-[-.2px]">DIASYS AI</b>
             <span className="text-[11px] text-muted">Klasifikasi EKG · HFpEF / HFrEF</span>
           </div>
         </div>

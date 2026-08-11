@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KardioWave AI — Klasifikasi EKG HFpEF & HFrEF</title>
+<title>DIASYS AI — Klasifikasi EKG HFpEF & HFrEF</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/400.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/500.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.20/600.css">
@@ -305,7 +305,7 @@ table.hist tbody tr:hover{background:#f8f9fe}
       <div class="brand-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.6a5 5 0 0 0-8.8-3.1A5 5 0 0 0 3.2 8.6c0 5.2 8.8 10.4 8.8 10.4s8.8-5.2 8.8-10.4Z"/><path d="M3.5 12h3.2l1.6-3.4 2.6 6.2 1.9-4.2 1 1.4h3.7"/></svg>
       </div>
-      <div><b>KardioWave AI</b><span>Klasifikasi EKG · HFpEF / HFrEF</span></div>
+      <div><b>DIASYS AI</b><span>Klasifikasi EKG · HFpEF / HFrEF</span></div>
     </div>
     <div class="tabs">
       <button class="tab active" data-view="analisis">Analisis</button>
@@ -641,7 +641,7 @@ table.hist tbody tr:hover{background:#f8f9fe}
 
 <script>
 /* ================================================================
-   KardioWave AI — pipeline EKG → CWT → CNN (HFpEF / HFrEF)
+   DIASYS AI — pipeline EKG → CWT → CNN (HFpEF / HFrEF)
 ================================================================ */
 const $=(s,el=document)=>el.querySelector(s);
 const $$=(s,el=document)=>[...el.querySelectorAll(s)];
@@ -1267,7 +1267,7 @@ function downloadReport(e){
   if(!e)return;
   const lines=[
 '════════════════════════════════════════════',
-'  LAPORAN ANALISIS EKG — KARDIOWAVE AI',
+'  LAPORAN ANALISIS EKG — DIASYS AI',
 '════════════════════════════════════════════','',
 `ID Analisis   : ${e.id}`,
 `Waktu         : ${fmtDate(e.ts)} ${fmtTime(e.ts)}`,

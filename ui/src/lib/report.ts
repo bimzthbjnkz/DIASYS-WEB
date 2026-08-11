@@ -27,7 +27,7 @@ export function downloadReport(e: ReportEntry): void {
   if (!e) return
   const lines = [
     '════════════════════════════════════════════',
-    '  LAPORAN ANALISIS EKG — KARDIOWAVE AI',
+    '  LAPORAN ANALISIS EKG — DIASYS AI',
     '════════════════════════════════════════════',
     '',
     `ID Analisis   : ${e.id}`,
