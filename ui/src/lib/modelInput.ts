@@ -98,7 +98,7 @@ function preprocessLead(sig: Float32Array, fs: number): Float32Array {
   return z
 }
 
-export function buildModelInput(ds: Dataset, fs: number, leadIdx: number): ModelInput {
+export function buildEchoNextInput(ds: Dataset, fs: number, leadIdx: number): ModelInput {
   const used = mapLeads(ds.cols.length)
   const channels: ModelChannel[] = used.map((ci) => {
     const col = ds.cols[ci]
@@ -116,4 +116,7 @@ export function buildModelInput(ds: Dataset, fs: number, leadIdx: number): Model
   }
   return { tensor, channels, displayIdx: disp >= 0 ? disp : 1, usedLeads: used }
 }
+
+/** @deprecated Use buildEchoNextInput instead. */
+export const buildModelInput = buildEchoNextInput
 

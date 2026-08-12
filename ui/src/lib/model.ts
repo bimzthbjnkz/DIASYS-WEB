@@ -1,12 +1,21 @@
 import * as tf from '@tensorflow/tfjs'
 
-const MODEL_URL = '/models/echonext/model.json'
-const CAM_LAYER = 'conv2d_2'
+/* ------------------------------------------------------------------ */
+/*  Model Registry — supports echonext and hfdetect models             */
+/* ------------------------------------------------------------------ */
 
-let modelPromise: Promise<tf.LayersModel> | null = null
-let camPromise: Promise<{ model: tf.LayersModel; cam: tf.LayersModel; w1: tf.Tensor; b1: tf.Tensor; w2: tf.Tensor; b2: tf.Tensor }> | null = null
+export type ModelName = 'echonext' | 'hfdetect'
 
-type ModelLoader = () => Promise<tf.LayersModel>
+interface ModelEntry {
+  url: string
+  instance: tf.LayersModel | null
+  promise: Promise<tf.LayersModel> | null
+}
+
+const MODELS: Record<ModelName, ModelEntry> = {
+  echonext: { url: '/models/echonext/model.json', instance: null, promise: null },
+  hfdetect: { url: '/models/hfdetect/model.json', instance: null, promise: null },
+}
 
 async function ensureBackend(): Promise<void> {
   try {
@@ -16,22 +25,40 @@ async function ensureBackend(): Promise<void> {
   }
 }
 
-let loader: ModelLoader = async () => {
+type ModelLoader = (name: ModelName) => Promise<tf.LayersModel>
+
+let loader: ModelLoader = async (name) => {
   await ensureBackend()
-  return tf.loadLayersModel(MODEL_URL)
+  return tf.loadLayersModel(MODELS[name].url)
 }
 
 /** Test seam: replace the model loader (e.g. fromMemory in Node). */
 export function _setModelLoaderForTest(fn: ModelLoader): void {
-  modelPromise = null
-  camPromise = null
+  for (const key of Object.keys(MODELS) as ModelName[]) {
+    MODELS[key].instance = null
+    MODELS[key].promise = null
+  }
   loader = fn
 }
 
-export function loadModel(): Promise<tf.LayersModel> {
-  if (!modelPromise) modelPromise = loader()
-  return modelPromise
+/** Load a model by name with lazy loading and caching. */
+export function loadModel(name: ModelName): Promise<tf.LayersModel> {
+  const entry = MODELS[name]
+  if (entry.instance) return Promise.resolve(entry.instance)
+  if (!entry.promise) {
+    entry.promise = loader(name).then((m) => {
+      entry.instance = m
+      return m
+    })
+  }
+  return entry.promise
 }
+
+/* ------------------------------------------------------------------ */
+/*  EchoNext — Grad-CAM bundle                                         */
+/* ------------------------------------------------------------------ */
+
+const CAM_LAYER = 'conv2d_2'
 
 export interface CamBundle {
   model: tf.LayersModel
@@ -42,10 +69,12 @@ export interface CamBundle {
   b2: tf.Tensor
 }
 
+let camPromise: Promise<CamBundle> | null = null
+
 async function loadCam(): Promise<CamBundle> {
   if (!camPromise) {
     camPromise = (async () => {
-      const model = await loadModel()
+      const model = await loadModel('echonext')
       const cam = tf.model({ inputs: model.inputs, outputs: model.getLayer(CAM_LAYER).output })
       const w1 = model.getLayer('dense').getWeights()[0]
       const b1 = model.getLayer('dense').getWeights()[1]
@@ -57,17 +86,21 @@ async function loadCam(): Promise<CamBundle> {
   return camPromise
 }
 
-export interface PredictResult {
+/* ------------------------------------------------------------------ */
+/*  Predict — EchoNext (HFpEF vs HFrEF)                               */
+/* ------------------------------------------------------------------ */
+
+export interface EchoNextResult {
   pHFpEF: number
   pHFrEF: number
 }
 
 /**
- * Run the CNN on a model input tensor (32, 2500, 3).
- * Sigmoid output = P(HFpEF) (label 1 = HFpEF in the EchoNext training set).
+ * Run the EchoNext CNN on a model input tensor (1, 32, 2500, 3).
+ * Sigmoid output = P(HFpEF).
  */
-export async function predictModel(tensor: Float32Array): Promise<PredictResult> {
-  const model = await loadModel()
+export async function predictEchoNext(tensor: Float32Array): Promise<EchoNextResult> {
+  const model = await loadModel('echonext')
   const t = tf.tensor4d(tensor, [1, 32, 2500, 3])
   try {
     const out = model.predict(t) as tf.Tensor
@@ -78,6 +111,40 @@ export async function predictModel(tensor: Float32Array): Promise<PredictResult>
     t.dispose()
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Predict — HF Detection (HF vs Non-HF)                             */
+/* ------------------------------------------------------------------ */
+
+export interface HFDetectResult {
+  /** True if Heart Failure is detected. */
+  isHF: boolean
+  /** P(HF) — probability of Heart Failure. */
+  pHF: number
+  /** P(Non-HF) — probability of Non-Heart Failure. */
+  pNonHF: number
+}
+
+/**
+ * Run the HF Detection CNN on a model input tensor (1, 32, 1000, 1).
+ * Sigmoid output = P(HF).
+ */
+export async function predictHFDetect(tensor: Float32Array): Promise<HFDetectResult> {
+  const model = await loadModel('hfdetect')
+  const t = tf.tensor4d(tensor, [1, 32, 1000, 1])
+  try {
+    const out = model.predict(t) as tf.Tensor
+    const pHF = (await out.data())[0]
+    out.dispose()
+    return { isHF: pHF >= 0.5, pHF, pNonHF: 1 - pHF }
+  } finally {
+    t.dispose()
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Grad-CAM for EchoNext                                              */
+/* ------------------------------------------------------------------ */
 
 /**
  * Grad-CAM over the last conv layer (conv2d_2), upscaled to (32, 2500)
@@ -111,6 +178,26 @@ export async function computeGradCam(tensor: Float32Array): Promise<Float32Array
   const range = mx - mn || 1
   for (let i = 0; i < data.length; i++) out[i] = (data[i] - mn) / range
   return out
+}
+
+/* ------------------------------------------------------------------ */
+/*  Generic predict helper (dispatches by model name)                  */
+/* ------------------------------------------------------------------ */
+
+export async function predictModel(
+  name: 'echonext',
+  tensor: Float32Array,
+): Promise<EchoNextResult>
+export async function predictModel(
+  name: 'hfdetect',
+  tensor: Float32Array,
+): Promise<HFDetectResult>
+export async function predictModel(
+  name: ModelName,
+  tensor: Float32Array,
+): Promise<EchoNextResult | HFDetectResult> {
+  if (name === 'echonext') return predictEchoNext(tensor)
+  return predictHFDetect(tensor)
 }
 
 export function isModelAvailable(): boolean {

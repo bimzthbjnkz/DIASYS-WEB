@@ -108,7 +108,8 @@ function UploadCard({ a }: UploadCardProps) {
         >
           <DownloadIcon className="h-[15px] w-[15px]" />
           Unduh contoh .csv
-        </button>      </div>
+        </button>
+      </div>
 
       {a.dataset && (
         <div className="mt-[18px]">
@@ -241,30 +242,36 @@ function PipelineCard() {
     {
       n: '1',
       cls: 'bg-primary-soft text-primary',
-      b: 'Preprocessing',
-      p: 'Resampling 250 Hz, jendela 10 detik, kalibrasi unit otomatis → µV.',
+      b: 'Upload Data',
+      p: 'File CSV 12 lead · deteksi delimiter & header otomatis.',
     },
     {
       n: '2',
       cls: 'bg-[#f1ecfe] text-[#7c3aed]',
-      b: 'Transformasi CWT',
-      p: 'Wavelet mexican-hat · 32 skala · 3 lead (I, II, V5) → tensor 32×2500×3.',
+      b: 'Preprocessing (HF Detection)',
+      p: 'Resampling 100 Hz, bandpass 0.5–40 Hz, z-score, CWT Morlet, min-max.',
     },
     {
       n: '3',
-      cls: 'bg-amber-soft text-amber',
-      b: 'Inferensi CNN',
-      p: 'EchoNext CNN — 3 blok konvolusional + BN + MaxPool, GAP, sigmoid + Grad-CAM.',
+      cls: 'bg-rose-soft text-rose',
+      b: 'Inferensi HF Detection',
+      p: 'HF Detection CNN — deteksi apakah pasien memiliki Heart Failure.',
     },
     {
       n: '4',
+      cls: 'bg-amber-soft text-amber',
+      b: 'Preprocessing (EchoNext)',
+      p: 'Resampling 250 Hz, median filter, clip, z-score, CWT mexh, 3 lead.',
+    },
+    {
+      n: '5',
       cls: 'bg-green-soft text-green',
-      b: 'Hasil & Laporan',
-      p: 'Kelas, konfidensi, pengukuran sinyal, dan laporan siap unduh.',
+      b: 'Inferensi EchoNext',
+      p: 'EchoNext CNN — klasifikasi HFpEF vs HFrEF (jika HF terdeteksi).',
     },
   ]
   return (
-    <Card title="Tahapan Pipeline" hint="urutan proses">
+    <Card title="Tahapan Pipeline" hint="cascaded 2-stage">
       <div className="flex flex-col">
         {rows.map((r, i) => (
           <div key={r.n} className="relative flex gap-[11px] py-[11px]">
@@ -300,9 +307,9 @@ export default function AnalisisView({ a, stats }: AnalisisViewProps) {
       <div className="page-head mb-[22px]">
         <h1 className="font-display text-[25px] tracking-[-.4px]">Analisis EKG</h1>
         <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-muted">
-          Unggah rekaman EKG pasien — sistem melakukan <b className="font-semibold text-ink">preprocessing</b>, transformasi{' '}
-          <b className="font-semibold text-ink">Continuous Wavelet Transform</b> menjadi scalogram, lalu inferensi{' '}
-          <b className="font-semibold text-ink">CNN</b> untuk membedakan HFpEF dan HFrEF.
+          Unggah rekaman EKG 12 lead — sistem menjalankan{' '}
+          <b className="font-semibold text-ink">HF Detection</b> terlebih dahulu untuk mendeteksi keberadaan Heart Failure, lalu jika terdeteksi HF, sistem menjalankan{' '}
+          <b className="font-semibold text-ink">EchoNext CNN</b> untuk membedakan HFpEF dan HFrEF.
         </p>
       </div>
 

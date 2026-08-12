@@ -27,6 +27,9 @@ interface SeedEntry {
     sdnn: number
   }
   thumb: string | null
+  hfDetectResult: { isHF: boolean; pHF: number; pNonHF: number }
+  stage2Klas: string | null
+  stage2Conf: number | null
 }
 
 function seedHistory(): SeedEntry[] {
@@ -50,6 +53,9 @@ function seedHistory(): SeedEntry[] {
     probs: klas === 'HFrEF' ? [1 - conf, conf] : [conf, 1 - conf],
     stats: { hr, amp, qrsW: w, sdnn: sd },
     thumb: null,
+    hfDetectResult: { isHF: true, pHF: 0.92, pNonHF: 0.08 },
+    stage2Klas: klas,
+    stage2Conf: conf,
   })
   return [
     mk('CW-5012', 1.1 * DAY, 'RS Cipto — lead II · PS-0142', 'HFrEF', 0.931, 86, 0.71, 138, 41),

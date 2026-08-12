@@ -1,5 +1,6 @@
 import { fmtDate, fmtPct, fmtTime } from './format'
 import { synthECG } from './ecg'
+import type { HFDetectResult } from './model'
 
 export interface InferResult {
   klas: string
@@ -21,10 +22,17 @@ export interface ReportEntry {
     sdnn: number
   }
   thumb: string | null
+  /** Stage 1 — HF Detection result. */
+  hfDetectResult: HFDetectResult
+  /** Stage 2 — EchoNext classification (null if Non-HF). */
+  stage2Klas: string | null
+  stage2Conf: number | null
 }
 
 export function downloadReport(e: ReportEntry): void {
   if (!e) return
+  const hf = e.hfDetectResult
+  const isHF = hf.isHF
   const lines = [
     '════════════════════════════════════════════',
     '  LAPORAN ANALISIS EKG — DIASYS AI',
@@ -34,27 +42,54 @@ export function downloadReport(e: ReportEntry): void {
     `Waktu         : ${fmtDate(e.ts)} ${fmtTime(e.ts)}`,
     `Sumber Data   : ${e.src}`,
     '',
-    'HASIL KLASIFIKASI',
-    `  Kelas       : ${e.klas} (${e.klas === 'HFrEF' ? 'Heart Failure with reduced EF' : 'Heart Failure with preserved EF'})`,
-    `  Konfidensi  : ${fmtPct(e.conf)}`,
-    `  P(HFpEF)    : ${fmtPct(e.probs[0])}`,
-    `  P(HFrEF)    : ${fmtPct(e.probs[1])}`,
+    '════════════════════════════════════════════',
+    '  STAGE 1 — HF DETECTION',
+    '════════════════════════════════════════════',
     '',
-    'PENGUKURAN SINYAL',
+    `  Hasil       : ${isHF ? 'Heart Failure' : 'Non-Heart Failure'}`,
+    `  P(HF)       : ${fmtPct(hf.pHF)}`,
+    `  P(Non-HF)   : ${fmtPct(hf.pNonHF)}`,
+    `  Model       : HF Detection CNN — 3 blok Conv2D+BN+MaxPool, GAP, sigmoid`,
+  ]
+
+  if (isHF && e.stage2Klas) {
+    lines.push(
+      '',
+      '════════════════════════════════════════════',
+      '  STAGE 2 — KLASIFIKASI TIPE HF',
+      '════════════════════════════════════════════',
+      '',
+      `  Kelas       : ${e.stage2Klas} (${e.stage2Klas === 'HFrEF' ? 'Heart Failure with reduced EF' : 'Heart Failure with preserved EF'})`,
+      `  Konfidensi  : ${fmtPct(e.stage2Conf ?? 0)}`,
+      `  P(HFpEF)    : ${fmtPct(e.probs[0])}`,
+      `  P(HFrEF)    : ${fmtPct(e.probs[1])}`,
+      `  Model       : EchoNext CNN — 3 blok Conv2D+BN+MaxPool, GAP, sigmoid`,
+    )
+  }
+
+  lines.push(
+    '',
+    '════════════════════════════════════════════',
+    '  PENGUKURAN SINYAL',
+    '════════════════════════════════════════════',
+    '',
     `  Estimasi HR     : ${e.stats.hr} bpm`,
     `  Amplitudo QRS   : ${e.stats.amp.toFixed(2)} mV`,
     `  Durasi QRS      : ${Math.round(e.stats.qrsW)} ms`,
     `  SDNN            : ${Math.round(e.stats.sdnn)} ms`,
     '',
-    'METODE',
-    '  Preprocessing : resampling 250 Hz, jendela 10 s, unit µV',
-    '  Ekstraksi     : CWT wavelet mexican-hat, 32 skala (1–32), 3 lead (I, II, V5)',
-    '  Model         : EchoNext CNN — 3 blok Conv2D+BN+MaxPool, GAP, Dense 64, sigmoid',
+    '════════════════════════════════════════════',
+    '  PIPELINE',
+    '════════════════════════════════════════════',
     '',
-    'CATATAN: Hasil bersifat pendukung keputusan dan harus',
-    'dikonfirmasi oleh dokter spesialis jantung.',
-  ].join('\n')
-  const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' })
+    '  Stage 1 : bandpass 0.5-40 Hz, z-score, CWT Morlet (cmor1.5-1.0), min-max',
+    '  Stage 2 : median filter, clip, z-score, CWT mexh, 3 lead (I, II, V5)',
+    '',
+    'CATATAN: Hasil bersifat pendukung keputusan klinis dan harus',
+    'dikonfirmasi oleh dokter spesialis jantung beserta ekokardiografi.',
+  )
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = `laporan_EKG_${e.id}.txt`

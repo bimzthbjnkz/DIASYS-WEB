@@ -62,7 +62,7 @@ function ProbRow({ color, label, prob }: { color: string; label: string; prob: n
           className="h-full rounded-[6px] transition-[width] duration-1000"
           style={{
             width: `${prob * 100}%`,
-            background: `linear-gradient(90deg, ${color}, ${color === '#d97706' ? '#fbbf24' : '#fb7185'})`,
+            background: `linear-gradient(90deg, ${color}, ${color === '#d97706' ? '#fbbf24' : color === '#7c3aed' ? '#a78bfa' : '#fb7185'})`,
             transitionTimingFunction: 'cubic-bezier(.3,.8,.3,1)',
           }}
         />
@@ -78,7 +78,6 @@ interface ResultPanelProps {
 export default function ResultPanel({ a }: ResultPanelProps) {
   const e = a.lastEntry
   const hasResult = !!e
-  const findings = e ? buildFindings(e) : []
 
   if (!hasResult) {
     return (
@@ -91,41 +90,95 @@ export default function ResultPanel({ a }: ResultPanelProps) {
           <p className="text-[13px] leading-[1.65]">
             Belum ada hasil.
             <br />
-            Muat data lalu jalankan analisis untuk melihat prediksi HFpEF / HFrEF.
+            Muat data lalu jalankan analisis cascade untuk deteksi HF dan klasifikasi tipe.
           </p>
         </div>
       </Card>
     )
   }
 
+  const hf = e.hfDetectResult
+  const isHF = hf.isHF
+
   return (
     <Card title="Hasil Klasifikasi" hint={`${e.id} · ${fmtTime(e.ts)}`}>
+      {/* ─── Stage 1: HF Detection ─── */}
+      <div className="sec-title mb-2">Stage 1 — HF Detection</div>
       <div className="flex items-center gap-[18px]">
         <div>
-          <div className="sec-title mb-2">Prediksi</div>
           <span
             className={`inline-block rounded-[13px] px-[18px] py-[9px] font-display text-2xl font-bold tracking-[-.4px] ${
-              e.klas === 'HFrEF'
+              isHF
                 ? 'border border-[#f6c6d1] bg-rose-soft text-rose'
-                : 'border border-[#f3ddb2] bg-amber-soft text-amber'
+                : 'border border-[#bbf7d0] bg-green-soft text-green'
             }`}
           >
-            {e.klas}
+            {isHF ? 'Heart Failure' : 'Non-HF'}
           </span>
         </div>
-        <ConfidenceRing conf={e.conf} />
+        <div className="relative ml-auto h-[94px] w-[94px] flex-shrink-0">
+          <svg className="ring h-[94px] w-[94px]" viewBox="0 0 100 100">
+            <circle className="ring-bg" cx="50" cy="50" r="45" />
+            <circle
+              className="ring-val"
+              style={{ strokeDashoffset: 283 * (1 - hf.pHF) }}
+              cx="50"
+              cy="50"
+              r="45"
+            />
+          </svg>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[2px]">
+            <div className="font-display text-[17px] font-bold leading-none">
+              {fmtPct(hf.pHF)}
+            </div>
+            <div className="text-[8.5px] font-bold tracking-[.8px] text-dim uppercase">P(HF)</div>
+          </div>
+        </div>
       </div>
-      <p className="mt-[13px] text-[12.5px] leading-[1.6] text-muted">
-        {e.klas === 'HFrEF'
-          ? 'Heart Failure with reduced Ejection Fraction — gagal jantung dengan fraksi ejeksi menurun (EF ≤ 40%).'
-          : 'Heart Failure with preserved Ejection Fraction — gagal jantung dengan fraksi ejeksi terjaga (EF ≥ 50%).'}
-      </p>
 
       <div className="divider" />
-      <div className="sec-title">Probabilitas Kelas</div>
-      <ProbRow color="#d97706" label="HFpEF · EF ≥ 50%" prob={e.probs[0]} />
-      <ProbRow color="#e11d48" label="HFrEF · EF ≤ 40%" prob={e.probs[1]} />
+      <div className="sec-title">Probabilitas Stage 1</div>
+      <ProbRow color="#e11d48" label="Heart Failure" prob={hf.pHF} />
+      <ProbRow color="#16a34a" label="Non-HF" prob={hf.pNonHF} />
 
+      {/* ─── Stage 2: EchoNext (only if HF) ─── */}
+      {isHF && e.stage2Klas && (
+        <>
+          <div className="mt-[18px] flex items-center gap-[6px]">
+            <span className="font-display text-[12px] font-bold text-rose">HF terdeteksi</span>
+            <span className="text-[12px] text-dim">→</span>
+            <span className="font-display text-[12px] font-bold text-rose">lanjut Stage 2</span>
+          </div>
+
+          <div className="mt-[14px] sec-title mb-2">Stage 2 — Klasifikasi Tipe HF</div>
+          <div className="flex items-center gap-[18px]">
+            <div>
+              <span
+                className={`inline-block rounded-[13px] px-[18px] py-[9px] font-display text-2xl font-bold tracking-[-.4px] ${
+                  e.stage2Klas === 'HFrEF'
+                    ? 'border border-[#f6c6d1] bg-rose-soft text-rose'
+                    : 'border border-[#f3ddb2] bg-amber-soft text-amber'
+                }`}
+              >
+                {e.stage2Klas}
+              </span>
+            </div>
+            <ConfidenceRing conf={e.stage2Conf ?? 0} />
+          </div>
+          <p className="mt-[13px] text-[12.5px] leading-[1.6] text-muted">
+            {e.stage2Klas === 'HFrEF'
+              ? 'Heart Failure with reduced Ejection Fraction — gagal jantung dengan fraksi ejeksi menurun (EF ≤ 40%).'
+              : 'Heart Failure with preserved Ejection Fraction — gagal jantung dengan fraksi ejeksi terjaga (EF ≥ 50%).'}
+          </p>
+
+          <div className="divider" />
+          <div className="sec-title">Probabilitas Stage 2</div>
+          <ProbRow color="#d97706" label="HFpEF · EF ≥ 50%" prob={e.probs[0]} />
+          <ProbRow color="#e11d48" label="HFrEF · EF ≤ 40%" prob={e.probs[1]} />
+        </>
+      )}
+
+      {/* ─── Signal Measurements ─── */}
       <div className="divider" />
       <div className="sec-title">Pengukuran Sinyal</div>
       <div className="grid grid-cols-2 gap-[10px]">
@@ -142,10 +195,11 @@ export default function ResultPanel({ a }: ResultPanelProps) {
         ))}
       </div>
 
+      {/* ─── Findings ─── */}
       <div className="divider" />
       <div className="sec-title">Temuan Pendukung</div>
       <ul className="flex list-none flex-col gap-[9px]">
-        {findings.map((f, i) => (
+        {buildFindings(e).map((f, i) => (
           <li key={i} className="flex gap-[9px] text-[12.5px] leading-[1.55] text-[#3f4c63]">
             <svg className="mt-[2px] h-[15px] w-[15px] flex-shrink-0 stroke-teal" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m5 12.5 4.5 4.5L19 7" />
@@ -155,6 +209,7 @@ export default function ResultPanel({ a }: ResultPanelProps) {
         ))}
       </ul>
 
+      {/* ─── Actions ─── */}
       <div className="divider" />
       <div className="flex gap-[9px]">
         <button className="btn btn-primary btn-sm" onClick={() => downloadReport(e)}>
@@ -175,28 +230,40 @@ export default function ResultPanel({ a }: ResultPanelProps) {
 
 function buildFindings(e: ReportEntry): string[] {
   const F: string[] = []
-  const m = e.stats
-  F.push(
-    m.amp < 0.85
-      ? `Voltase QRS rendah (${m.amp.toFixed(2).replace('.', ',')} mV) — sering terkait disfungsi sistolik.`
-      : m.amp > 1.15
-        ? `Voltase QRS tinggi (${m.amp.toFixed(2).replace('.', ',')} mV) — sugestif hipertrofi ventrikel kiri.`
-        : `Voltase QRS relatif normal (${m.amp.toFixed(2).replace('.', ',')} mV).`,
-  )
-  F.push(
-    m.qrsW > 110
-      ? `Durasi QRS memanjang (${Math.round(m.qrsW)} ms) — indikasi gangguan konduksi intraventrikular.`
-      : `Durasi QRS dalam batas normal (${Math.round(m.qrsW)} ms).`,
-  )
-  F.push(
-    m.hr > 95
-      ? `Irama cenderung takikardia (HR ≈ ${m.hr} bpm).`
-      : m.hr < 58
-        ? `Irama cenderung bradikardia (HR ≈ ${m.hr} bpm).`
-        : `Laju jantung normal (HR ≈ ${m.hr} bpm).`,
-  )
-  if (e.src.includes('HFpEF')) F.push('Morfologi gelombang P lebar/bifid (P mitrale) terdeteksi — khas pada HFpEF.')
-  if (e.src.includes('HFrEF')) F.push('Segmen ST-T mendatar dengan kecenderungan QT memanjang — khas pada HFrEF.')
-  F.push('Pola energi scalogram cocok dengan distribusi kelas pada data pelatihan CNN.')
+  const hf = e.hfDetectResult
+
+  // Stage 1 findings
+  if (hf.isHF) {
+    F.push(`Heart Failure terdeteksi (P(HF) = ${fmtPct(hf.pHF)}).`)
+  } else {
+    F.push(`Tidak terdeteksi Heart Failure (P(Non-HF) = ${fmtPct(hf.pNonHF)}).`)
+  }
+
+  // Stage 2 findings (only if HF)
+  if (hf.isHF && e.stage2Klas) {
+    const m = e.stats
+    F.push(
+      m.amp < 0.85
+        ? `Voltase QRS rendah (${m.amp.toFixed(2).replace('.', ',')} mV) — sering terkait disfungsi sistolik.`
+        : m.amp > 1.15
+          ? `Voltase QRS tinggi (${m.amp.toFixed(2).replace('.', ',')} mV) — sugestif hipertrofi ventrikel kiri.`
+          : `Voltase QRS relatif normal (${m.amp.toFixed(2).replace('.', ',')} mV).`,
+    )
+    F.push(
+      m.qrsW > 110
+        ? `Durasi QRS memanjang (${Math.round(m.qrsW)} ms) — indikasi gangguan konduksi intraventrikular.`
+        : `Durasi QRS dalam batas normal (${Math.round(m.qrsW)} ms).`,
+    )
+    F.push(
+      m.hr > 95
+        ? `Irama cenderung takikardia (HR ≈ ${m.hr} bpm).`
+        : m.hr < 58
+          ? `Irama cenderung bradikardia (HR ≈ ${m.hr} bpm).`
+          : `Laju jantung normal (HR ≈ ${m.hr} bpm).`,
+    )
+    if (e.stage2Klas === 'HFpEF') F.push('Morfologi gelombang P lebar/bifid (P mitrale) terdeteksi — khas pada HFpEF.')
+    if (e.stage2Klas === 'HFrEF') F.push('Segmen ST-T mendatar dengan kecenderungan QT memanjang — khas pada HFrEF.')
+  }
+
   return F
 }

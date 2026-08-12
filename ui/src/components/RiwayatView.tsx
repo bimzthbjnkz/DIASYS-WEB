@@ -6,6 +6,7 @@ const FILTERS = [
   { id: 'all', label: 'Semua' },
   { id: 'HFpEF', label: 'HFpEF' },
   { id: 'HFrEF', label: 'HFrEF' },
+  { id: 'Non-HF', label: 'Non-HF' },
 ]
 
 interface RiwayatViewProps {

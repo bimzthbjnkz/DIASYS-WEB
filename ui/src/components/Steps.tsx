@@ -1,6 +1,6 @@
 import { CheckIcon } from './icons'
 
-const LABELS = ['Unggah Data', 'Preprocessing', 'CWT', 'Inferensi CNN']
+const LABELS = ['Unggah Data', 'Prep HF', 'Inferensi HF', 'Prep Echo', 'Inferensi CNN']
 
 interface StepsProps {
   steps: string[]
