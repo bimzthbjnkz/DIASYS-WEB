@@ -24,11 +24,11 @@ export default function Modal({ entry, onClose, onDownload }: ModalProps) {
   const p2 = entry.probs[1] * 100
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(15,23,42,.45)] p-5 backdrop-blur-[5px]" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="animate-pop max-h-[90vh] w-[min(660px,100%)] overflow-y-auto rounded-[20px] bg-white shadow-lg">
-        <div className="flex items-center justify-between border-b border-line px-6 py-[19px]">
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-[rgba(10,21,18,.6)] p-5 backdrop-blur-[5px]" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="animate-pop max-h-[90vh] w-[min(660px,100%)] overflow-y-auto rounded-[14px] bg-[#FFFDF7] border border-[rgba(14,31,25,0.15)] shadow-[0_34px_70px_-38px_rgba(10,21,18,.7)]">
+        <div className="flex items-center justify-between border-b border-[rgba(14,31,25,0.15)] bg-[#ECE8DD] px-6 py-[19px]">
           <h3 className="font-display text-base">
-            Detail Analisis <span className="font-mono text-primary">{entry.id}</span>
+            Detail Analisis <span className="font-mono text-[#0B8A63]">{entry.id}</span>
           </h3>
           <button className="btn-icon" onClick={onClose} aria-label="Tutup">
             <CloseIcon className="h-[14px] w-[14px]" />
@@ -38,39 +38,39 @@ export default function Modal({ entry, onClose, onDownload }: ModalProps) {
         <div className="grid grid-cols-2 gap-[22px] p-6 max-[640px]:grid-cols-1">
           <div>
             {entry.thumb ? (
-              <img className="m-thumb w-full rounded-xl border border-line" src={entry.thumb} alt="Scalogram" />
+              <img className="m-thumb w-full rounded-[8px] border border-[rgba(14,31,25,0.15)]" src={entry.thumb} alt="Scalogram" />
             ) : (
-              <div className="grid aspect-video place-items-center rounded-xl border-[1.5px] border-dashed border-line2 p-3 text-center text-xs text-dim">
+              <div className="grid aspect-video place-items-center rounded-[8px] border-[1.5px] border-dashed border-[rgba(14,31,25,0.18)] p-3 text-center text-xs text-[#7FA394]">
                 Scalogram tidak tersimpan untuk entri ini
               </div>
             )}
           </div>
           <div>
             <div className="sec-title mb-[6px]">Prediksi</div>
-            <div className={`m-klas font-display text-[32px] font-bold tracking-[-.5px] ${entry.klas === 'HFrEF' ? 'text-rose' : 'text-amber'}`}>
+            <div className={`m-klas font-display text-[32px] font-bold tracking-[-.5px] ${entry.klas === 'HFrEF' ? 'text-[#E0502E]' : 'text-[#E7A63A]'}`}>
               {entry.klas}
             </div>
-            <div className="mt-[3px] text-[12.5px] text-muted">
+            <div className="mt-[3px] text-[12.5px] text-[#54655D]">
               Konfidensi {fmtPct(entry.conf)} · {fmtDate(entry.ts)} {fmtTime(entry.ts)}
             </div>
             <div className="divider my-4" />
             <div className="sec-title">Probabilitas Kelas</div>
             <div className="prob-row mt-[11px]">
               <div className="flex justify-between text-[12.5px] font-semibold">
-                <span className="text-amber">HFpEF</span>
+                <span className="text-[#E7A63A]">HFpEF</span>
                 <b className="font-mono">{fmtPct(entry.probs[0])}</b>
               </div>
-              <div className="mt-1.5 h-[9px] overflow-hidden rounded-[6px] bg-[#f0f3f9]">
-                <div className="h-full rounded-[6px] bg-gradient-to-r from-[#f59e0b] to-[#fbbf24]" style={{ width: `${p1}%` }} />
+              <div className="mt-1.5 h-[9px] overflow-hidden rounded-[6px] bg-[rgba(14,31,25,0.06)]">
+                <div className="h-full rounded-[6px] bg-gradient-to-r from-[#E7A63A] to-[#F5C542]" style={{ width: `${p1}%` }} />
               </div>
             </div>
             <div className="prob-row mt-[11px]">
               <div className="flex justify-between text-[12.5px] font-semibold">
-                <span className="text-rose">HFrEF</span>
+                <span className="text-[#E0502E]">HFrEF</span>
                 <b className="font-mono">{fmtPct(entry.probs[1])}</b>
               </div>
-              <div className="mt-1.5 h-[9px] overflow-hidden rounded-[6px] bg-[#f0f3f9]">
-                <div className="h-full rounded-[6px] bg-gradient-to-r from-[#e11d48] to-[#fb7185]" style={{ width: `${p2}%` }} />
+              <div className="mt-1.5 h-[9px] overflow-hidden rounded-[6px] bg-[rgba(14,31,25,0.06)]">
+                <div className="h-full rounded-[6px] bg-gradient-to-r from-[#E0502E] to-[#FF7A56]" style={{ width: `${p2}%` }} />
               </div>
             </div>
             <div className="mt-4 flex flex-col gap-2 text-[12.5px]">
@@ -81,8 +81,8 @@ export default function Modal({ entry, onClose, onDownload }: ModalProps) {
                 ['Durasi QRS', `${Math.round(entry.stats.qrsW)} ms`],
                 ['SDNN', `${Math.round(entry.stats.sdnn)} ms`],
               ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-3 border-b border-dashed border-line pb-[7px]">
-                  <span className="text-muted">{k}</span>
+                <div key={k} className="flex justify-between gap-3 border-b border-dashed border-[rgba(14,31,25,0.12)] pb-[7px]">
+                  <span className="text-[#54655D]">{k}</span>
                   <b className="text-right font-semibold">{v}</b>
                 </div>
               ))}
@@ -90,7 +90,7 @@ export default function Modal({ entry, onClose, onDownload }: ModalProps) {
           </div>
         </div>
 
-        <div className="flex justify-end gap-[9px] border-t border-line px-6 py-[17px]">
+        <div className="flex justify-end gap-[9px] border-t border-[rgba(14,31,25,0.15)] px-6 py-[17px]">
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
             Tutup
           </button>

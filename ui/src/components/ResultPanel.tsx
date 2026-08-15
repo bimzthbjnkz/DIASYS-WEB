@@ -33,8 +33,8 @@ function ConfidenceRing({ conf }: { conf: number }) {
       <svg className="ring h-[94px] w-[94px]" viewBox="0 0 100 100">
         <defs>
           <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#4f46e5" />
-            <stop offset="1" stopColor="#0d9488" />
+            <stop offset="0" stopColor="#0B8A63" />
+            <stop offset="1" stopColor="#2EE6A8" />
           </linearGradient>
         </defs>
         <circle className="ring-bg" cx="50" cy="50" r="45" />
@@ -44,7 +44,7 @@ function ConfidenceRing({ conf }: { conf: number }) {
         <div className="font-display text-[17px] font-bold leading-none">
           {(anim * 100).toFixed(1).replace('.', ',')}%
         </div>
-        <div className="text-[8.5px] font-bold tracking-[.8px] text-dim uppercase">konfidensi</div>
+        <div className="font-mono text-[8.5px] font-bold tracking-[.8px] text-[#7FA394] uppercase">konfidensi</div>
       </div>
     </div>
   )
@@ -57,12 +57,12 @@ function ProbRow({ color, label, prob }: { color: string; label: string; prob: n
         <span style={{ color }}>{label}</span>
         <b className="font-mono">{fmtPct(prob)}</b>
       </div>
-      <div className="h-[9px] overflow-hidden rounded-[6px] bg-[#f0f3f9]">
+      <div className="h-[9px] overflow-hidden rounded-[6px] bg-[rgba(14,31,25,0.06)]">
         <div
           className="h-full rounded-[6px] transition-[width] duration-1000"
           style={{
             width: `${prob * 100}%`,
-            background: `linear-gradient(90deg, ${color}, ${color === '#d97706' ? '#fbbf24' : color === '#7c3aed' ? '#a78bfa' : '#fb7185'})`,
+            background: `linear-gradient(90deg, ${color}, ${color === '#E7A63A' ? '#F5C542' : color === '#0B8A63' ? '#2EE6A8' : '#FF7A56'})`,
             transitionTimingFunction: 'cubic-bezier(.3,.8,.3,1)',
           }}
         />
@@ -82,7 +82,7 @@ export default function ResultPanel({ a }: ResultPanelProps) {
   if (!hasResult) {
     return (
       <Card title="Hasil Klasifikasi">
-        <div className="px-[22px] py-[46px] text-center text-dim">
+        <div className="px-[22px] py-[46px] text-center text-[#7FA394]">
           <svg className="mx-auto mb-3 h-[46px] w-[46px] opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M20.8 8.6a5 5 0 0 0-8.8-3.1A5 5 0 0 0 3.2 8.6c0 5.2 8.8 10.4 8.8 10.4s8.8-5.2 8.8-10.4Z" />
             <path d="M3.5 12h3.2l1.6-3.4 2.6 6.2 1.9-4.2 1 1.4h3.7" />
@@ -107,10 +107,10 @@ export default function ResultPanel({ a }: ResultPanelProps) {
       <div className="flex items-center gap-[18px]">
         <div>
           <span
-            className={`inline-block rounded-[13px] px-[18px] py-[9px] font-display text-2xl font-bold tracking-[-.4px] ${
+            className={`inline-block rounded-[8px] px-[18px] py-[9px] font-display text-2xl font-bold tracking-[-.4px] ${
               isHF
-                ? 'border border-[#f6c6d1] bg-rose-soft text-rose'
-                : 'border border-[#bbf7d0] bg-green-soft text-green'
+                ? 'border border-[rgba(224,80,46,0.3)] bg-[rgba(224,80,46,0.1)] text-[#E0502E]'
+                : 'border border-[rgba(46,230,168,0.3)] bg-[rgba(46,230,168,0.1)] text-[#2EE6A8]'
             }`}
           >
             {isHF ? 'Heart Failure' : 'Non-HF'}
@@ -131,33 +131,33 @@ export default function ResultPanel({ a }: ResultPanelProps) {
             <div className="font-display text-[17px] font-bold leading-none">
               {fmtPct(hf.pHF)}
             </div>
-            <div className="text-[8.5px] font-bold tracking-[.8px] text-dim uppercase">P(HF)</div>
+            <div className="font-mono text-[8.5px] font-bold tracking-[.8px] text-[#7FA394] uppercase">P(HF)</div>
           </div>
         </div>
       </div>
 
       <div className="divider" />
       <div className="sec-title">Probabilitas Stage 1</div>
-      <ProbRow color="#e11d48" label="Heart Failure" prob={hf.pHF} />
-      <ProbRow color="#16a34a" label="Non-HF" prob={hf.pNonHF} />
+      <ProbRow color="#E0502E" label="Heart Failure" prob={hf.pHF} />
+      <ProbRow color="#2EE6A8" label="Non-HF" prob={hf.pNonHF} />
 
       {/* ─── Stage 2: EchoNext (only if HF) ─── */}
       {isHF && e.stage2Klas && (
         <>
           <div className="mt-[18px] flex items-center gap-[6px]">
-            <span className="font-display text-[12px] font-bold text-rose">HF terdeteksi</span>
-            <span className="text-[12px] text-dim">→</span>
-            <span className="font-display text-[12px] font-bold text-rose">lanjut Stage 2</span>
+            <span className="font-display text-[12px] font-bold text-[#E0502E]">HF terdeteksi</span>
+            <span className="text-[12px] text-[#7FA394]">→</span>
+            <span className="font-display text-[12px] font-bold text-[#E0502E]">lanjut Stage 2</span>
           </div>
 
           <div className="mt-[14px] sec-title mb-2">Stage 2 — Klasifikasi Tipe HF</div>
           <div className="flex items-center gap-[18px]">
             <div>
               <span
-                className={`inline-block rounded-[13px] px-[18px] py-[9px] font-display text-2xl font-bold tracking-[-.4px] ${
+                className={`inline-block rounded-[8px] px-[18px] py-[9px] font-display text-2xl font-bold tracking-[-.4px] ${
                   e.stage2Klas === 'HFrEF'
-                    ? 'border border-[#f6c6d1] bg-rose-soft text-rose'
-                    : 'border border-[#f3ddb2] bg-amber-soft text-amber'
+                    ? 'border border-[rgba(224,80,46,0.3)] bg-[rgba(224,80,46,0.1)] text-[#E0502E]'
+                    : 'border border-[rgba(231,166,58,0.3)] bg-[rgba(231,166,58,0.12)] text-[#E7A63A]'
                 }`}
               >
                 {e.stage2Klas}
@@ -165,7 +165,7 @@ export default function ResultPanel({ a }: ResultPanelProps) {
             </div>
             <ConfidenceRing conf={e.stage2Conf ?? 0} />
           </div>
-          <p className="mt-[13px] text-[12.5px] leading-[1.6] text-muted">
+          <p className="mt-[13px] text-[12.5px] leading-[1.6] text-[#54655D]">
             {e.stage2Klas === 'HFrEF'
               ? 'Heart Failure with reduced Ejection Fraction — gagal jantung dengan fraksi ejeksi menurun (EF ≤ 40%).'
               : 'Heart Failure with preserved Ejection Fraction — gagal jantung dengan fraksi ejeksi terjaga (EF ≥ 50%).'}
@@ -173,8 +173,8 @@ export default function ResultPanel({ a }: ResultPanelProps) {
 
           <div className="divider" />
           <div className="sec-title">Probabilitas Stage 2</div>
-          <ProbRow color="#d97706" label="HFpEF · EF ≥ 50%" prob={e.probs[0]} />
-          <ProbRow color="#e11d48" label="HFrEF · EF ≤ 40%" prob={e.probs[1]} />
+          <ProbRow color="#E7A63A" label="HFpEF · EF ≥ 50%" prob={e.probs[0]} />
+          <ProbRow color="#E0502E" label="HFrEF · EF ≤ 40%" prob={e.probs[1]} />
         </>
       )}
 
@@ -188,9 +188,9 @@ export default function ResultPanel({ a }: ResultPanelProps) {
           ['Amplitudo QRS (mV)', e.stats.amp ? e.stats.amp.toFixed(2).replace('.', ',') : '—'],
           ['Variabilitas RR / SDNN (ms)', e.stats.sdnn ? Math.round(e.stats.sdnn) : '—'],
         ].map(([k, v]) => (
-          <div key={k} className="rounded-xl border border-line bg-[#f8f9fd] px-[13px] py-[11px]">
+          <div key={k} className="rounded-xl border border-[rgba(14,31,25,0.12)] bg-[rgba(14,31,25,0.03)] px-[13px] py-[11px]">
             <div className="font-display text-[17px] font-bold">{v}</div>
-            <div className="mt-[2px] text-[10.5px] text-muted">{k}</div>
+            <div className="mt-[2px] text-[10.5px] text-[#54655D]">{k}</div>
           </div>
         ))}
       </div>
@@ -201,7 +201,7 @@ export default function ResultPanel({ a }: ResultPanelProps) {
       <ul className="flex list-none flex-col gap-[9px]">
         {buildFindings(e).map((f, i) => (
           <li key={i} className="flex gap-[9px] text-[12.5px] leading-[1.55] text-[#3f4c63]">
-            <svg className="mt-[2px] h-[15px] w-[15px] flex-shrink-0 stroke-teal" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="mt-[2px] h-[15px] w-[15px] flex-shrink-0 stroke-[#0B8A63]" viewBox="0 0 24 24" fill="none" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m5 12.5 4.5 4.5L19 7" />
             </svg>
             {f}
@@ -221,7 +221,7 @@ export default function ResultPanel({ a }: ResultPanelProps) {
           Ulangi
         </button>
       </div>
-      <div className="mt-[14px] rounded-[10px] border-l-[3px] border-line2 bg-[#f8f9fd] px-3 py-[10px] text-[11px] leading-[1.6] text-dim">
+      <div className="mt-[14px] rounded-[10px] border-l-[3px] border-[rgba(14,31,25,0.15)] bg-[rgba(14,31,25,0.03)] px-3 py-[10px] text-[11px] leading-[1.6] text-[#7FA394]">
         Hasil bersifat pendukung keputusan klinis dan harus dikonfirmasi oleh dokter spesialis jantung beserta ekokardiografi.
       </div>
     </Card>

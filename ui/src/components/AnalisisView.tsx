@@ -42,10 +42,10 @@ function UploadCard({ a }: UploadCardProps) {
   return (
     <Card title="1 · Sumber Data EKG" hint="maks. 12 detik diproses">
       <div
-        className={`rounded-[14px] border-[1.5px] border-dashed p-[30px_18px] text-center transition-colors duration-200 ${
+        className={`rounded-[8px] border-[1.5px] border-dashed p-[30px_18px] text-center transition-colors duration-200 ${
           dragging.current
-            ? 'border-primary bg-primary-soft'
-            : 'border-line2 bg-[#fafbfe] hover:border-primary hover:bg-primary-soft'
+            ? 'border-[#0B8A63] bg-[rgba(11,138,99,0.05)]'
+            : 'border-[rgba(14,31,25,0.18)] bg-transparent hover:border-[#0B8A63] hover:bg-[rgba(11,138,99,0.04)]'
         }`}
         onClick={() => !a.running && fileInputRef.current?.click()}
         onDragOver={(e) => {
@@ -63,16 +63,16 @@ function UploadCard({ a }: UploadCardProps) {
         onDrop={onDrop}
         style={{ cursor: 'pointer' }}
       >
-        <div className="mx-auto mb-[11px] grid h-[46px] w-[46px] place-items-center rounded-[13px] bg-primary-soft">
-          <UploadIcon className="h-[22px] w-[22px] stroke-primary" />
+        <div className="mx-auto mb-[11px] grid h-[46px] w-[46px] place-items-center rounded-[13px] bg-[rgba(11,138,99,0.08)]">
+          <UploadIcon className="h-[22px] w-[22px] stroke-[#0B8A63]" />
         </div>
         <b className="block text-[14px]">Seret &amp; letakkan file EKG, atau klik untuk memilih</b>
-        <span className="mt-1.5 block text-xs leading-[1.55] text-muted">
+        <span className="mt-1.5 block text-xs leading-[1.55] text-[#54655D]">
           Kolom numerik dideteksi otomatis · multi-lead didukung · skala unit (mV / µV / ADC) dikalibrasi otomatis
         </span>
         <div className="mt-3 flex flex-wrap justify-center gap-[7px]">
           {['.csv', '.txt', '.dat (MIT-BIH 212)', 'delimiter auto'].map((f) => (
-            <span key={f} className="rounded-[7px] border border-line bg-white px-[9px] py-1 font-mono text-[10.5px] font-semibold text-muted">
+            <span key={f} className="rounded-[7px] border border-[rgba(14,31,25,0.15)] bg-transparent px-[9px] py-1 font-mono text-[10.5px] font-semibold text-[#54655D]">
               {f}
             </span>
           ))}
@@ -91,11 +91,11 @@ function UploadCard({ a }: UploadCardProps) {
 
       <div className="mt-[14px] flex flex-wrap gap-[9px]">
         <button className="alt-btn" onClick={() => a.loadSample('hfpEF')} disabled={a.running}>
-          <span className="h-[9px] w-[9px] rounded-[3px] bg-amber" />
+          <span className="h-[9px] w-[9px] rounded-[3px] bg-[#E7A63A]" />
           Data contoh · HFpEF
         </button>
         <button className="alt-btn" onClick={() => a.loadSample('hfref')} disabled={a.running}>
-          <span className="h-[9px] w-[9px] rounded-[3px] bg-rose" />
+          <span className="h-[9px] w-[9px] rounded-[3px] bg-[#E0502E]" />
           Data contoh · HFrEF
         </button>
         <button
@@ -113,13 +113,13 @@ function UploadCard({ a }: UploadCardProps) {
 
       {a.dataset && (
         <div className="mt-[18px]">
-          <div className="mb-[14px] flex items-center gap-3 rounded-xl border border-line bg-[#fafbfe] p-3">
-            <div className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] bg-primary-soft">
-              <FileIcon className="h-[18px] w-[18px] stroke-primary" />
+          <div className="mb-[14px] flex items-center gap-3 rounded-xl border border-[rgba(14,31,25,0.12)] bg-[rgba(14,31,25,0.03)] p-3">
+            <div className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] bg-[rgba(11,138,99,0.08)]">
+              <FileIcon className="h-[18px] w-[18px] stroke-[#0B8A63]" />
             </div>
             <div className="min-w-0">
               <b className="block max-w-[340px] truncate text-[13px]">{a.dataset.name}</b>
-              <span className="text-[11.5px] text-muted">{dataMeta}</span>
+              <span className="text-[11.5px] text-[#54655D]">{dataMeta}</span>
             </div>
             <button className="btn btn-ghost btn-sm ml-auto" onClick={a.clearData}>
               Ganti
@@ -181,15 +181,15 @@ function SignalSection({ a }: SignalSectionProps) {
   return (
     <Card title="2 · Sinyal EKG" hint="kertas 25 mm/s · 1 mV">
       <div className="chart-label">
-        <span className="h-2 w-2 rounded-full bg-primary" /> Sinyal mentah
+        <span className="h-2 w-2 rounded-full bg-[#0B8A63]" /> Sinyal mentah
         <span className="tag">{rawTag}</span>
       </div>
-      <SignalCanvas data={a.raw} fs={a.fsUsed} color="#4f46e5" emptyMsg="menunggu data EKG…" />
+      <SignalCanvas data={a.raw} fs={a.fsUsed} color="#0B8A63" emptyMsg="menunggu data EKG…" />
       <div className="chart-label mt-[15px]">
-        <span className="h-2 w-2 rounded-full bg-teal" /> Hasil preprocessing
+        <span className="h-2 w-2 rounded-full bg-[#2EE6A8]" /> Hasil preprocessing
         <span className="tag">{preTag}</span>
       </div>
-      <SignalCanvas data={a.pre} fs={a.fsUsed} color="#0d9488" peaks={a.peaksIdx} emptyMsg="menunggu tahap preprocessing…" />
+      <SignalCanvas data={a.pre} fs={a.fsUsed} color="#2EE6A8" peaks={a.peaksIdx} emptyMsg="menunggu tahap preprocessing…" />
     </Card>
   )
 }
@@ -213,7 +213,7 @@ function ScalogramSection({ a }: ScalogramSectionProps) {
         canvasRef={a.scalCanvasRef}
       />
       <div className="mt-[14px] flex flex-wrap items-center gap-4">
-        <label className="flex items-center gap-2 text-[12.5px] font-semibold text-muted">
+        <label className="flex items-center gap-2 text-[12.5px] font-semibold text-[#54655D]">
           Peta warna
           <select value={a.colormap} onChange={(e) => a.setColormap(e.target.value)} className="min-w-[110px]">
             <option value="inferno">Inferno</option>
@@ -226,11 +226,11 @@ function ScalogramSection({ a }: ScalogramSectionProps) {
           <input type="checkbox" checked={a.gradcam} onChange={(e) => a.setGradcam(e.target.checked)} />
           <span className="tr" />
         </label>
-        <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-muted">
+        <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-[#54655D]">
           Overlay Grad-CAM
         </label>
       </div>
-      <div className="mt-3 font-mono text-[11px] font-medium text-dim">
+      <div className="mt-3 font-mono text-[11px] font-medium text-[#7FA394]">
         Wavelet mexican-hat · 32 skala (1–32) · 3 lead (I, II, V5) · pita ≈2–62 Hz
       </div>
     </Card>
@@ -241,31 +241,36 @@ function PipelineCard() {
   const rows = [
     {
       n: '1',
-      cls: 'bg-primary-soft text-primary',
+      bg: 'rgba(11, 138, 99, 0.08)',
+      color: '#0B8A63',
       b: 'Upload Data',
       p: 'File CSV 12 lead · deteksi delimiter & header otomatis.',
     },
     {
       n: '2',
-      cls: 'bg-[#f1ecfe] text-[#7c3aed]',
+      bg: 'rgba(124, 58, 237, 0.08)',
+      color: '#7c3aed',
       b: 'Preprocessing (HF Detection)',
       p: 'Resampling 100 Hz, bandpass 0.5–40 Hz, z-score, CWT Morlet, min-max.',
     },
     {
       n: '3',
-      cls: 'bg-rose-soft text-rose',
+      bg: 'rgba(224, 80, 46, 0.1)',
+      color: '#E0502E',
       b: 'Inferensi HF Detection',
       p: 'HF Detection CNN — deteksi apakah pasien memiliki Heart Failure.',
     },
     {
       n: '4',
-      cls: 'bg-amber-soft text-amber',
+      bg: 'rgba(231, 166, 58, 0.12)',
+      color: '#E7A63A',
       b: 'Preprocessing (EchoNext)',
       p: 'Resampling 250 Hz, median filter, clip, z-score, CWT mexh, 3 lead.',
     },
     {
       n: '5',
-      cls: 'bg-green-soft text-green',
+      bg: 'rgba(46, 230, 168, 0.1)',
+      color: '#2EE6A8',
       b: 'Inferensi EchoNext',
       p: 'EchoNext CNN — klasifikasi HFpEF vs HFrEF (jika HF terdeteksi).',
     },
@@ -275,13 +280,16 @@ function PipelineCard() {
       <div className="flex flex-col">
         {rows.map((r, i) => (
           <div key={r.n} className="relative flex gap-[11px] py-[11px]">
-            {i < rows.length - 1 && <span className="absolute top-10 bottom-[-3px] left-[13px] w-[2px] bg-line" />}
-            <div className={`z-10 grid h-[28px] w-[28px] flex-shrink-0 place-items-center rounded-[9px] font-display text-xs font-bold ${r.cls}`}>
+            {i < rows.length - 1 && <span className="absolute top-10 bottom-[-3px] left-[13px] w-[2px] bg-[rgba(14,31,25,0.12)]" />}
+            <div
+              className="z-10 grid h-[28px] w-[28px] flex-shrink-0 place-items-center rounded-[9px] font-display text-xs font-bold"
+              style={{ background: r.bg, color: r.color }}
+            >
               {r.n}
             </div>
             <div>
               <b className="block text-[12.5px]">{r.b}</b>
-              <p className="mt-[2px] text-[11.5px] leading-[1.5] text-muted">{r.p}</p>
+              <p className="mt-[2px] text-[11.5px] leading-[1.5] text-[#54655D]">{r.p}</p>
             </div>
           </div>
         ))}
@@ -305,11 +313,12 @@ export default function AnalisisView({ a, stats }: AnalisisViewProps) {
   return (
     <>
       <div className="page-head mb-[22px]">
-        <h1 className="font-display text-[25px] tracking-[-.4px]">Analisis EKG</h1>
-        <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-muted">
+        <span className="kicker reveal in" style={{ '--d': '0s' } as React.CSSProperties}>04 · Analisis EKG</span>
+        <h1 className="mt-3 font-display text-[clamp(1.8rem,4vw,2.6rem)] tracking-[-.4px]">Analisis EKG</h1>
+        <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-[#54655D]">
           Unggah rekaman EKG 12 lead — sistem menjalankan{' '}
-          <b className="font-semibold text-ink">HF Detection</b> terlebih dahulu untuk mendeteksi keberadaan Heart Failure, lalu jika terdeteksi HF, sistem menjalankan{' '}
-          <b className="font-semibold text-ink">EchoNext CNN</b> untuk membedakan HFpEF dan HFrEF.
+          <b className="font-semibold text-[#0E1F19]">HF Detection</b> terlebih dahulu untuk mendeteksi keberadaan Heart Failure, lalu jika terdeteksi HF, sistem menjalankan{' '}
+          <b className="font-semibold text-[#0E1F19]">EchoNext CNN</b> untuk membedakan HFpEF dan HFrEF.
         </p>
       </div>
 
