@@ -6,6 +6,55 @@ import * as tf from '@tensorflow/tfjs'
 
 export type ModelName = 'echonext' | 'hfdetect'
 
+/* ------------------------------------------------------------------ */
+/*  Custom Normalization layer — Keras Normalization is not in tfjs     */
+/* ------------------------------------------------------------------ */
+
+class Normalization extends tf.layers.Layer {
+  static readonly className = 'Normalization'
+  private readonly meanData: number[]
+  private readonly varianceData: number[]
+  private readonly axis: number[]
+
+  constructor(config: {
+    mean?: number[]
+    variance?: number[]
+    axis?: number[]
+    name?: string
+  }) {
+    super({ name: config.name ?? 'normalization_1', trainable: false, ...config })
+    this.meanData = config.mean ?? []
+    this.varianceData = config.variance ?? []
+    this.axis = config.axis ?? [3]
+  }
+
+  override call(inputs: tf.Tensor[]): tf.Tensor {
+    const input = Array.isArray(inputs) ? inputs[0] : inputs
+    const mean = tf.tensor1d(this.meanData)
+    const variance = tf.tensor1d(this.varianceData)
+    const std = tf.sqrt(variance)
+    const result = input.sub(mean).div(std)
+    mean.dispose()
+    variance.dispose()
+    std.dispose()
+    return result
+  }
+
+  override computeOutputShape(inputShape: tf.Shape): tf.Shape {
+    return inputShape
+  }
+
+  override getConfig(): tf.serialization.ConfigDict {
+    const config = super.getConfig()
+    config.mean = this.meanData
+    config.variance = this.varianceData
+    config.axis = this.axis
+    return config
+  }
+}
+
+tf.serialization.registerClass(Normalization)
+
 interface ModelEntry {
   url: string
   instance: tf.LayersModel | null
