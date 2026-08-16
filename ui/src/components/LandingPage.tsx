@@ -362,7 +362,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
       $$('.faq-item.open').forEach(o => {
         o.classList.remove('open')
         const a = o.querySelector('.faq-a') as HTMLElement | null
-        if (a) a.style.maxHeight = 'null'
+        if (a) a.style.maxHeight = '0'
         o.querySelector('.faq-q')?.setAttribute('aria-expanded', 'false')
       })
       if (!wasOpen) {
@@ -403,7 +403,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
       <header id="nav" className="lp-nav">
         <div className="wrap nav-in">
           <a className="brand" href="#atas" aria-label="DIASYS — kembali ke atas">
-            <svg width="26" height="16" viewBox="0 0 26 16" fill="none" aria-hidden="true"><path d="M0 9h5l2-5 3 10 3-13 3 11 2-3h8" stroke="#0B8A63" stroke-width="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <svg width="26" height="16" viewBox="0 0 26 16" fill="none" aria-hidden="true"><path d="M0 9h5l2-5 3 10 3-13 3 11 2-3h8" stroke="#0B8A63" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
             DIASYS <em>PROJECT</em>
           </a>
           <nav className="nav-links" aria-label="Navigasi utama">
@@ -566,7 +566,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
               <h2><span className="lr"><span className="lr-in">Dari sinyal menuju keputusan.</span></span></h2>
               <p className="lead reveal" style={{ '--d': '.1s' } as React.CSSProperties}>Lima langkah berurutan mengubah rekaman EKG mentah menjadi rekomendasi klasifikasi yang dapat dibaca klinisi.</p>
               <ol className="stages-index" id="stageIndex">
-                <li data-i="0" class="active"><button type="button"><b>00</b> Akuisisi Sinyal</button></li>
+                <li data-i="0" className="active"><button type="button"><b>00</b> Akuisisi Sinyal</button></li>
                 <li data-i="1"><button type="button"><b>01</b> CWT → Skalogram</button></li>
                 <li data-i="2"><button type="button"><b>02</b> CNN Tahap 1</button></li>
                 <li data-i="3"><button type="button"><b>03</b> CNN Tahap 2</button></li>
@@ -761,7 +761,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
           <div className="foot-grid">
             <div className="foot-brand">
               <a className="brand" href="#atas">
-                <svg width="26" height="16" viewBox="0 0 26 16" fill="none" aria-hidden="true"><path d="M0 9h5l2-5 3 10 3-13 3 11 2-3h8" stroke="#2EE6A8" stroke-width="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <svg width="26" height="16" viewBox="0 0 26 16" fill="none" aria-hidden="true"><path d="M0 9h5l2-5 3 10 3-13 3 11 2-3h8" stroke="#2EE6A8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 DIASYS <em>PROJECT</em>
               </a>
               <p>Sistem pendukung keputusan klinis untuk klasifikasi non-invasif gagal jantung sistolik dan diastolik berbasis sinyal EKG, Continuous Wavelet Transform, dan Two-Stage Deep Learning.</p>

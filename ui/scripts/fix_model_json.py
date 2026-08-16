@@ -51,6 +51,46 @@ def fix_input_layers(layers):
                 fix_input_layers(nested_layers)
 
 
+def fix_inbound_nodes(layers):
+    """Recursively convert Keras 3 inbound_nodes (dict with args/kwargs)
+    to tfjs-layers format (array: [layer_name, node_index, tensor_index]).
+    Handles both single-input and multi-input (Add, Concatenate) layers.
+    Also recurse into nested Functional sub-models."""
+    for layer in layers:
+        inbound = layer.get('inbound_nodes', [])
+        if isinstance(inbound, list):
+            for i, node in enumerate(inbound):
+                if isinstance(node, dict) and 'args' in node:
+                    # Keras 3 format: extract keras_history from args
+                    args = node.get('args', [])
+                    if args and isinstance(args[0], list):
+                        # Multi-input layer (e.g., Add, Concatenate):
+                        # args = [[tensor1, tensor2, ...]]
+                        connections = []
+                        for tensor in args[0]:
+                            if isinstance(tensor, dict):
+                                hist = tensor.get('config', {}).get('keras_history', [])
+                                if len(hist) == 3:
+                                    connections.append(list(hist))
+                        if connections:
+                            inbound[i] = connections
+                    elif args and isinstance(args[0], dict):
+                        # Single-input layer:
+                        # args = [tensor]
+                        hist = args[0].get('config', {}).get('keras_history', [])
+                        if len(hist) == 3:
+                            inbound[i] = list(hist)
+                elif isinstance(node, dict) and not node:
+                    # Empty dict -> empty array
+                    inbound[i] = []
+        # Recurse into nested Functional sub-models
+        cfg = layer.get('config')
+        if isinstance(cfg, dict) and layer.get('class_name') == 'Functional':
+            nested_layers = cfg.get('layers', [])
+            if nested_layers:
+                fix_inbound_nodes(nested_layers)
+
+
 def fix(path: str) -> None:
     d = json.load(open(path, encoding='utf-8'))
     tp = d['modelTopology']
@@ -61,6 +101,8 @@ def fix(path: str) -> None:
     # InputLayer: batch_shape -> batch_input_shape (tfjs-layers requirement).
     # Recursively fix all InputLayers including nested Functional sub-models.
     fix_input_layers(layers)
+    # Convert Keras 3 inbound_nodes dict format to tfjs-layers array format.
+    fix_inbound_nodes(layers)
     for layer in layers:
         cfg = layer.get('config')
         if isinstance(cfg, dict):
