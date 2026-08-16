@@ -22,7 +22,8 @@ import {
   MODEL_SCALES,
 } from '../lib/modelInput'
 import type { ModelInput } from '../lib/modelInput'
-import { buildHFDetectInput } from '../lib/hfDetectInput'
+import { buildHFDetectInput, getAvailableLeadOptions } from '../lib/hfDetectInput'
+import type { LeadOption as HFLeadOption } from '../lib/hfDetectInput'
 import { computeGradCam, predictEchoNext, predictHFDetect } from '../lib/model'
 import type { HFDetectResult, EchoNextResult } from '../lib/model'
 
@@ -63,6 +64,9 @@ export interface UseAnalysisReturn {
   stage: string
   unitNote: string
   leadOptions: LeadOption[]
+  hfLeadOptions: HFLeadOption[]
+  hfLeadsOverride: number[] | null
+  setHfLeadsOverride: (indices: number[] | null) => void
   scalCanvasRef: React.RefObject<HTMLCanvasElement | null>
   finishDataset: (
     name: string,
@@ -118,6 +122,8 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
   const [steps, setSteps] = useState<string[]>(['', '', '', '', ''])
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('siap · menunggu data')
+  const [hfLeadsOverride, setHfLeadsOverride] = useState<number[] | null>(null)
+  const [hfLeadOptions, setHfLeadOptions] = useState<HFLeadOption[]>([])
 
   const scalCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const runRef = useRef(false)
@@ -179,10 +185,13 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
       note: string,
       kind = 'upload'
     ) => {
-      setDataset({ name, cols, names, kind, note })
+      const ds: Dataset = { name, cols, names, kind, note }
+      setDataset(ds)
       setFs(defaultFs)
       const ls = cols.length > 1 ? bestLead(cols) : 0
       setLead(ls)
+      setHfLeadOptions(getAvailableLeadOptions(ds))
+      setHfLeadsOverride(null)
       markStep(0, 'done')
       setProgress(8)
       setStage('data siap · tahap 1 selesai')
@@ -337,7 +346,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
 
     let hfInput: ReturnType<typeof buildHFDetectInput>
     try {
-      hfInput = buildHFDetectInput(ds, fs)
+      hfInput = buildHFDetectInput(ds, fs, hfLeadsOverride ?? undefined)
       setProgress(22)
       await sleep(150)
       markStep(1, 'done')
@@ -525,7 +534,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
       runningRef.current = false
       setRunning(false)
     }
-  }, [dataset, fs, lead, gradcam, markStep, onNewEntry, resetRunUI, runningRef, toast])
+  }, [dataset, fs, lead, gradcam, hfLeadsOverride, markStep, onNewEntry, resetRunUI, runningRef, toast])
 
   return {
     toast,
@@ -554,6 +563,9 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     stage,
     unitNote,
     leadOptions,
+    hfLeadOptions,
+    hfLeadsOverride,
+    setHfLeadsOverride,
     scalCanvasRef,
     finishDataset,
     loadFile,

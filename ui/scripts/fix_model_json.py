@@ -36,6 +36,21 @@ def clean_config(obj):
     return obj
 
 
+def fix_input_layers(layers):
+    """Recursively fix batch_shape -> batch_input_shape in all InputLayers,
+    including those inside nested Functional sub-models."""
+    for layer in layers:
+        cfg = layer.get('config')
+        if layer.get('class_name') == 'InputLayer' and isinstance(cfg, dict):
+            if 'batch_shape' in cfg and 'batch_input_shape' not in cfg:
+                cfg['batch_input_shape'] = cfg.pop('batch_shape')
+        # Recurse into nested Functional sub-models
+        if isinstance(cfg, dict) and layer.get('class_name') == 'Functional':
+            nested_layers = cfg.get('layers', [])
+            if nested_layers:
+                fix_input_layers(nested_layers)
+
+
 def fix(path: str) -> None:
     d = json.load(open(path, encoding='utf-8'))
     tp = d['modelTopology']
@@ -44,11 +59,10 @@ def fix(path: str) -> None:
         raise SystemExit(f'no model_config found in {path}')
     layers = mc['config']['layers']
     # InputLayer: batch_shape -> batch_input_shape (tfjs-layers requirement).
+    # Recursively fix all InputLayers including nested Functional sub-models.
+    fix_input_layers(layers)
     for layer in layers:
         cfg = layer.get('config')
-        if layer.get('class_name') == 'InputLayer' and isinstance(cfg, dict):
-            if 'batch_shape' in cfg and 'batch_input_shape' not in cfg:
-                cfg['batch_input_shape'] = cfg.pop('batch_shape')
         if isinstance(cfg, dict):
             for k in [k for k in cfg if k in DROPPED_KEYS]:
                 cfg.pop(k)

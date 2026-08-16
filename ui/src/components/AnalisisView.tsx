@@ -153,6 +153,28 @@ function UploadCard({ a }: UploadCardProps) {
                 </select>
               </label>
             )}
+            {a.hfLeadOptions.length > 1 && (
+              <label className="field">
+                <span>Lead untuk HF Detection</span>
+                <select
+                  value={a.hfLeadsOverride ? a.hfLeadsOverride.join(',') : 'auto'}
+                  onChange={(e) => {
+                    if (e.target.value === 'auto') {
+                      a.setHfLeadsOverride(null)
+                    } else {
+                      a.setHfLeadsOverride(e.target.value.split(',').map(Number))
+                    }
+                  }}
+                  disabled={a.running}
+                >
+                  {a.hfLeadOptions.map((o, i) => (
+                    <option key={i} value={o.isAuto ? 'auto' : o.indices.join(',')}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="field">
               <span>Kalibrasi unit</span>
               <span className="unit-pill">{a.unitNote}</span>
@@ -251,7 +273,7 @@ function PipelineCard() {
       bg: 'rgba(124, 58, 237, 0.08)',
       color: '#7c3aed',
       b: 'Preprocessing (HF Detection)',
-      p: 'Resampling 100 Hz, bandpass 0.5–40 Hz, z-score, CWT Morlet, min-max.',
+      p: 'Resampling 100 Hz, z-score, CWT Morlet, min-max. Lead: prioritas klinis (II/V2/V5 → I/II/III → V1/V2/V3 → V4/V5/V6).',
     },
     {
       n: '3',

@@ -37,16 +37,16 @@
                 {
                   "class_name": "InputLayer",
                   "config": {
-                    "batch_shape": [
+                    "dtype": "float32",
+                    "sparse": false,
+                    "ragged": false,
+                    "name": "input_layer_2",
+                    "batch_input_shape": [
                       null,
                       224,
                       224,
                       3
-                    ],
-                    "dtype": "float32",
-                    "sparse": false,
-                    "ragged": false,
-                    "name": "input_layer_2"
+                    ]
                   },
                   "name": "input_layer_2",
                   "inbound_nodes": []

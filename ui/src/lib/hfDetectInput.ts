@@ -30,64 +30,108 @@ export interface HFDetectInput {
 }
 
 /**
- * Find leads II, V2, V5 from the dataset.
+ * Clinical priority lead combinations for HF Detection.
+ * Order: II/V2/V5 (training leads) → I/II/III (limb) → V1/V2/V3 → V4/V5/V6 → aVL/aVF/V5 → fallback.
+ */
+const LEAD_COMBOS: string[][] = [
+  ['ii', 'v2', 'v5'],
+  ['i', 'ii', 'iii'],
+  ['v1', 'v2', 'v3'],
+  ['v4', 'v5', 'v6'],
+  ['avl', 'avf', 'v5'],
+]
+
+/**
+ * Try to find a specific lead by name patterns.
+ */
+function findLeadByName(ds: Dataset, patterns: string[]): number {
+  for (const pat of patterns) {
+    const key = pat.toLowerCase().replace(/[\s_\-]/g, '')
+    // Exact match
+    for (let i = 0; i < ds.names.length; i++) {
+      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+      if (n === key) return i
+    }
+    // Substring match
+    for (let i = 0; i < ds.names.length; i++) {
+      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+      if (n.includes(key)) return i
+    }
+  }
+  return -1
+}
+
+/**
+ * Get patterns for a lead name (e.g., 'ii' → ['ii', 'leadii', 'lead_ii', 'lead ii', 'ii_']).
+ */
+function leadPatterns(name: string): string[] {
+  return [name, `lead${name}`, `lead_${name}`, `lead ${name}`, `${name}_`]
+}
+
+/**
+ * Find best 3 leads from the dataset using clinical priority fallback.
  * Falls back to duplicating available leads if not all are found.
  *
  * Supports both 12-lead (I, II, III, aVR, aVL, aVF, V1-V6)
  * and 8-lead (aVL, aVF, V1-V6) formats.
  */
 function findLeads(ds: Dataset): number[] {
-  const result: number[] = []
-  // Patterns for each target lead: II, V2, V5
-  // Each sub-array has patterns to match (case-insensitive, after removing separators)
-  const targets = [
-    ['ii', 'leadii', 'lead_ii', 'lead ii', 'ii_'],
-    ['v2', 'leadv2', 'lead_v2', 'lead v2', 'v2_'],
-    ['v5', 'leadv5', 'lead_v5', 'lead v5', 'v5_'],
-  ]
-
-  for (const pats of targets) {
-    let found = -1
-    // Try name-based matching first (exact match)
-    for (let i = 0; i < ds.names.length; i++) {
-      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
-      for (const pat of pats) {
-        if (n === pat.replace(/[\s_\-]/g, '')) {
-          found = i
-          break
-        }
-      }
-      if (found >= 0) break
+  // Try each clinical priority combination
+  for (const combo of LEAD_COMBOS) {
+    const indices = combo.map((name) => findLeadByName(ds, leadPatterns(name)))
+    if (indices.every((i) => i >= 0)) {
+      return indices
     }
-
-    // If not found, try substring matching for 8-lead formats
-    // e.g., "Lead_V2" contains "v2", "Lead_aVL" contains "avl"
-    if (found < 0) {
-      const searchKey = pats[0] // primary pattern, e.g., "ii", "v2", "v5"
-      for (let i = 0; i < ds.names.length; i++) {
-        const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
-        if (n.includes(searchKey)) {
-          found = i
-          break
-        }
-      }
-    }
-
-    result.push(found)
   }
 
-  // Fallback: try index-based matching for standard 12-lead layout
-  // Standard order: I=0, II=1, III=2, aVR=3, aVL=4, aVF=5, V1=6, V2=7, V3=8, V4=9, V5=10, V6=11
+  // Fallback: try standard 12-lead index positions
   const fallbackIndices = [1, 7, 10] // II, V2, V5 in standard 12-lead
-  for (let i = 0; i < 3; i++) {
-    if (result[i] < 0 && fallbackIndices[i] < ds.cols.length) {
-      result[i] = fallbackIndices[i]
-    }
-  }
+  const result = fallbackIndices.map((i) => (i < ds.cols.length ? i : -1))
 
   // If still not all leads found, duplicate the first available lead
   const firstAvailable = result.find((r) => r >= 0) ?? 0
   return result.map((r) => (r >= 0 && r < ds.cols.length ? r : firstAvailable))
+}
+
+/**
+ * Get available lead options for UI dropdown.
+ * Returns all possible 3-lead combinations that can be selected.
+ */
+export interface LeadOption {
+  label: string
+  indices: number[]
+  isAuto: boolean
+}
+
+export function getAvailableLeadOptions(ds: Dataset): LeadOption[] {
+  const options: LeadOption[] = [{ label: 'Auto (prioritas klinis)', indices: [], isAuto: true }]
+
+  // Add clinical priority combinations that are available
+  for (const combo of LEAD_COMBOS) {
+    const indices = combo.map((name) => findLeadByName(ds, leadPatterns(name)))
+    if (indices.every((i) => i >= 0)) {
+      const labels = indices.map((i) => ds.names[i])
+      options.push({ label: labels.join(', '), indices, isAuto: false })
+    }
+  }
+
+  // Add any other valid 3-lead combinations from available leads
+  if (ds.names.length >= 3) {
+    for (let i = 0; i < ds.names.length; i++) {
+      for (let j = i + 1; j < ds.names.length; j++) {
+        for (let k = j + 1; k < ds.names.length; k++) {
+          const indices = [i, j, k]
+          const key = indices.join(',')
+          // Skip if already in options
+          if (options.some((o) => o.indices.join(',') === key)) continue
+          const labels = indices.map((idx) => ds.names[idx])
+          options.push({ label: labels.join(', '), indices, isAuto: false })
+        }
+      }
+    }
+  }
+
+  return options
 }
 
 /**
@@ -148,10 +192,11 @@ function resizeBilinear2D(
  * Build the HF Detection model input from a dataset.
  * @param ds    The loaded dataset with columns and names
  * @param fs    Sampling rate of the dataset
+ * @param leadOverride Optional array of 3 lead indices to use (overrides auto-detect)
  * @returns     HFDetectInput ready for model.predict()
  */
-export function buildHFDetectInput(ds: Dataset, fs: number): HFDetectInput {
-  const leadIndices = findLeads(ds)
+export function buildHFDetectInput(ds: Dataset, fs: number, leadOverride?: number[]): HFDetectInput {
+  const leadIndices = leadOverride && leadOverride.length === 3 ? leadOverride : findLeads(ds)
   const leadNames = leadIndices.map((i) => ds.names[i] || `Lead ${i + 1}`)
 
   const scalograms: Float32Array[] = []
