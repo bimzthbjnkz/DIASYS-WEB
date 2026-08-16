@@ -2,25 +2,23 @@ import { useEffect } from 'react'
 import Card from './Card'
 import { GridIcon, LayersIcon, WaveIcon } from './icons'
 
-/* ─── Stage 1: HF Detection ─── */
+/* ─── Stage 1: HF Detection (EfficientNetV2B0) ─── */
 const HF_ARCH: [string, string, string][] = [
-  ['00', 'Input — scalogram CWT Morlet · Lead II', '32×1000×1'],
-  ['01', 'Conv2D 32@(3×7) + BN + ReLU + MaxPool (2×4)', '16×250×32'],
-  ['02', 'Conv2D 64@(3×5) + BN + ReLU + MaxPool (2×4)', '8×62×64'],
-  ['03', 'Conv2D 128@(3×3) + BN + ReLU + MaxPool (2×2)', '4×31×128'],
-  ['04', 'GlobalAveragePooling2D', '128'],
-  ['05', 'Dropout 0,3 + Dense 64 + ReLU', '64'],
-  ['06', 'Dropout 0,2 + Dense 1 + Sigmoid → P(HF)', '1'],
+  ['00', 'Input — scalogram CWT Morlet · 3 lead (II, V2, V5)', '224×224×3'],
+  ['01', 'EfficientNetV2B0 (pretrained, backbone frozen)', '1280'],
+  ['02', 'Dense 128 + ReLU', '128'],
+  ['03', 'Dropout 0,4', '128'],
+  ['04', 'Dense 1 + Sigmoid → P(HF)', '1'],
 ]
 
-/* ─── Stage 2: EchoNext ─── */
+/* ─── Stage 2: EchoNext (EfficientNetV2B0) ─── */
 const EN_ARCH: [string, string, string][] = [
-  ['00', 'Input — scalogram CWT mexican-hat · 3 lead (I, II, V5)', '32×2500×3'],
-  ['01', 'Conv2D 32@(3×7) + BN + ReLU + MaxPool (2×4)', '15×623×32'],
-  ['02', 'Conv2D 64@(3×5) + BN + ReLU + MaxPool (2×4)', '6×154×64'],
-  ['03', 'Conv2D 128@(3×3) + BN + ReLU + MaxPool (2×4)', '2×38×128'],
-  ['04', 'GlobalAveragePooling2D', '128'],
-  ['05', 'Dense 64 + ReLU + Dropout 0,5', '64'],
+  ['00', 'Input — scalogram CWT Morlet · 3 lead (I, II, V5)', '160×160×3'],
+  ['01', 'EfficientNetV2B0 (pretrained, backbone frozen)', '1280'],
+  ['02', 'Dense 128 + BatchNorm + ReLU', '128'],
+  ['03', 'Dropout 0,3', '128'],
+  ['04', 'Dense 64 + ReLU', '64'],
+  ['05', 'Dropout 0,15', '64'],
   ['06', 'Dense 1 + Sigmoid → P(HFpEF)', '1'],
 ]
 
@@ -37,14 +35,14 @@ export default function ModelView() {
   const cascadeCards = [
     {
       n: '① Stage 1 — HF Detection',
-      p: 'Bandpass 0.5–40 Hz → z-score → CWT Morlet (cmor1.5-1.0) 32 skala → min-max [0,1]. Input: Lead II, 100 Hz, 1000 sampel.',
+      p: 'Z-score → CWT Morlet (morl) 31 skala → min-max [0,1] → resize 224×224. Input: 3 lead (II, V2, V5), fs=100 Hz.',
       icon: <WaveIcon className="h-5 w-5" />,
       bg: 'rgba(124, 58, 237, 0.08)',
       color: '#7c3aed',
     },
     {
       n: '② Stage 2 — EchoNext',
-      p: 'Median filter → clip persentil → z-score → CWT mexican-hat 32 skala. Input: Lead I, II, V5, 250 Hz, 2500 sampel.',
+      p: 'Resample 250 Hz → downsample ×2 → CWT Morlet 48 skala → min-max [0,1] → resize 160×160. Input: 3 lead (I, II, V5).',
       icon: <LayersIcon className="h-5 w-5" />,
       bg: 'rgba(11, 138, 99, 0.08)',
       color: '#0B8A63',
@@ -65,7 +63,7 @@ export default function ModelView() {
         <h1 className="mt-3 font-display text-[clamp(1.8rem,4vw,2.6rem)] tracking-[-.4px]">Model &amp; Pipeline</h1>
         <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-[#54655D]">
           Sistem cascaded 2-stage — <b className="font-semibold text-[#0E1F19]">HF Detection</b> mendeteksi keberadaan Heart Failure, lalu{' '}
-          <b className="font-semibold text-[#0E1F19]">EchoNext CNN</b> mengklasifikasikan HFpEF vs HFrEF. Keduanya dijalankan di browser via TensorFlow.js.
+          <b className="font-semibold text-[#0E1F19]">EchoNext EfficientNetV2B0</b> mengklasifikasikan HFpEF vs HFrEF. Keduanya dijalankan di browser via TensorFlow.js.
         </p>
       </div>
 
@@ -93,13 +91,13 @@ export default function ModelView() {
       {/* ─── Two Model Architectures ─── */}
       <div className="grid grid-cols-2 gap-4 max-[980px]:grid-cols-1">
         {/* Stage 1: HF Detection */}
-        <Card title="Stage 1 — HF Detection CNN" hint="≈116 ribu parameter">
+        <Card title="Stage 1 — HF Detection CNN" hint="≈6 juta parameter">
           <div className="mb-[10px] rounded-[8px] border border-[rgba(124,58,237,0.25)] bg-[rgba(124,58,237,0.06)] px-3 py-2 text-[11px] leading-[1.6] text-[#7c3aed]">
-            <b>Dataset:</b> PTB-XL · 7,836 sampel (3,918 HF + 3,918 Non-HF) · 12 lead ECG
+            <b>Dataset:</b> PTB-XL · 2,500 sampel (1,250 HF + 1,250 Non-HF) · 12 lead ECG
             <br />
             <b>Tugas:</b> Deteksi Heart Failure (MI indicators) vs Non-HF
             <br />
-            <b>Input:</b> CWT Morlet Lead II · (32, 1000, 1) · fs=100 Hz
+            <b>Input:</b> CWT Morlet 3 lead (II, V2, V5) · (224, 224, 3) · fs=100 Hz
           </div>
           <ul className="list-none">
             {HF_ARCH.map(([idx, name, shape]) => (
@@ -111,7 +109,7 @@ export default function ModelView() {
             ))}
           </ul>
           <div className="mt-[14px] flex flex-wrap gap-[7px]">
-            {['loss=binary crossentropy', 'optimizer=Adam', 'class weight balanced', 'lead: II only', 'cmor1.5-1.0 · 32 skala'].map((h) => (
+            {['loss=binary crossentropy', 'optimizer=Adam', 'class weight balanced', 'lead: II, V2, V5', 'morl · 31 skala'].map((h) => (
               <span key={h} className="rounded-[8px] border border-[rgba(14,31,25,0.15)] bg-transparent px-[10px] py-1.5 font-mono text-[10.5px] font-semibold text-[#54655D]">
                 {h}
               </span>
@@ -120,13 +118,13 @@ export default function ModelView() {
         </Card>
 
         {/* Stage 2: EchoNext */}
-        <Card title="Stage 2 — EchoNext CNN" hint="≈116 ribu parameter">
+        <Card title="Stage 2 — EchoNext CNN" hint="≈6 juta parameter">
           <div className="mb-[10px] rounded-[8px] border border-[rgba(11,138,99,0.25)] bg-[rgba(11,138,99,0.06)] px-3 py-2 text-[11px] leading-[1.6] text-[#0B8A63]">
-            <b>Dataset:</b> EchoNext · 61,149 ECG · 12 lead (500 Hz)
+            <b>Dataset:</b> EchoNext · 2,400 ECG · 12 lead (500 Hz)
             <br />
             <b>Tugas:</b> HFpEF (EF≥50%) vs HFrEF (EF≤40%)
             <br />
-            <b>Input:</b> CWT mexh Lead I, II, V5 · (32, 2500, 3) · fs=250 Hz
+            <b>Input:</b> CWT Morlet 3 lead (I, II, V5) · (160, 160, 3) · fs=250 Hz
           </div>
           <ul className="list-none">
             {EN_ARCH.map(([idx, name, shape]) => (
@@ -138,7 +136,7 @@ export default function ModelView() {
             ))}
           </ul>
           <div className="mt-[14px] flex flex-wrap gap-[7px]">
-            {['loss=binary crossentropy', 'optimizer=Adam', 'class weight balanced', 'lead: I, II, V5', 'skala 1–32 · mexh'].map((h) => (
+            {['loss=binary crossentropy', 'optimizer=Adam', 'class weight balanced', 'lead: I, II, V5', 'morl · 48 skala · downsample ×2'].map((h) => (
               <span key={h} className="rounded-[8px] border border-[rgba(14,31,25,0.15)] bg-transparent px-[10px] py-1.5 font-mono text-[10.5px] font-semibold text-[#54655D]">
                 {h}
               </span>

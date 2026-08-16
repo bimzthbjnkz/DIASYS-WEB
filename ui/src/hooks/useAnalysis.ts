@@ -14,8 +14,13 @@ import {
 import type { Dataset, MeasureResult, PeakResult, ScalResult } from '../lib/ecg'
 import type { ReportEntry } from '../lib/report'
 import { captureScalogramThumb } from '../lib/draw'
-import { cwtScales } from '../lib/cwtMexh'
-import { buildEchoNextInput, MODEL_FS, MODEL_N, MODEL_SCALES } from '../lib/modelInput'
+import { morlScales } from '../lib/cwtMorl'
+import {
+  buildEchoNextInput,
+  MODEL_FS,
+  MODEL_N,
+  MODEL_SCALES,
+} from '../lib/modelInput'
 import type { ModelInput } from '../lib/modelInput'
 import { buildHFDetectInput } from '../lib/hfDetectInput'
 import { computeGradCam, predictEchoNext, predictHFDetect } from '../lib/model'
@@ -74,20 +79,20 @@ export interface UseAnalysisReturn {
   markStep: (i: number, st: string) => void
 }
 
-function scalFromMexh(mag: Float32Array, fs: number): ScalResult {
+function scalFromMorl(mag: Float32Array, fs: number): ScalResult {
   const smp = Float32Array.from(mag)
   smp.sort()
   const p99 = smp[Math.floor(smp.length * 0.99)] || 1
   return {
     mag,
-    scales: cwtScales(),
+    scales: morlScales(MODEL_SCALES),
     T: MODEL_N,
     ns: MODEL_SCALES,
     fs,
     p99,
     a0: 1,
     ratio: 1,
-    mode: 'mexh',
+    mode: 'morl',
   }
 }
 
@@ -441,7 +446,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     try {
       mi = buildEchoNextInput(ds, fs, lead)
       modelTensorRef.current = mi.tensor
-      setScal(scalFromMexh(mi.channels[mi.displayIdx].mag, MODEL_FS))
+      setScal(scalFromMorl(mi.channels[mi.displayIdx].mag, MODEL_FS))
       setProgress(58)
       await sleep(120)
       markStep(3, 'done')
@@ -475,7 +480,7 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
       }
 
       const thumb = captureScalogramThumb(
-        scalFromMexh(mi.channels[mi.displayIdx].mag, MODEL_FS),
+        scalFromMorl(mi.channels[mi.displayIdx].mag, MODEL_FS),
         y,
         peaks.map((i) => i / rfs),
         enKlas,

@@ -1,0 +1,15 @@
+{
+    "selected_leads": [
+        "II",
+        "V2",
+        "V5"
+    ],
+    "input_shape": [
+        224,
+        224,
+        3
+    ],
+    "sampling_rate": 100,
+    "training_note": "continued_from_v1",
+    "initial_lr_continue": 5e-05
+}

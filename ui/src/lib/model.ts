@@ -55,18 +55,16 @@ export function loadModel(name: ModelName): Promise<tf.LayersModel> {
 }
 
 /* ------------------------------------------------------------------ */
-/*  EchoNext — Grad-CAM bundle                                         */
+/*  EchoNext — Grad-CAM bundle (EfficientNetV2B0)                      */
 /* ------------------------------------------------------------------ */
 
-const CAM_LAYER = 'conv2d_2'
+/** Last convolutional layer in EfficientNetV2B0 for Grad-CAM. */
+const CAM_LAYER = 'top_conv'
 
 export interface CamBundle {
   model: tf.LayersModel
   cam: tf.LayersModel
-  w1: tf.Tensor
-  b1: tf.Tensor
-  w2: tf.Tensor
-  b2: tf.Tensor
+  denseWeights: tf.Tensor[]
 }
 
 let camPromise: Promise<CamBundle> | null = null
@@ -75,12 +73,21 @@ async function loadCam(): Promise<CamBundle> {
   if (!camPromise) {
     camPromise = (async () => {
       const model = await loadModel('echonext')
-      const cam = tf.model({ inputs: model.inputs, outputs: model.getLayer(CAM_LAYER).output })
-      const w1 = model.getLayer('dense').getWeights()[0]
-      const b1 = model.getLayer('dense').getWeights()[1]
-      const w2 = model.getLayer('dense_1').getWeights()[0]
-      const b2 = model.getLayer('dense_1').getWeights()[1]
-      return { model, cam, w1, b1, w2, b2 }
+      const cam = tf.model({
+        inputs: model.inputs,
+        outputs: model.getLayer(CAM_LAYER).output,
+      })
+
+      // Extract dense layer weights for the classifier head
+      // EfficientNetV2B0 head: dense(N) → ... → dense(1)
+      const denseLayers: tf.Tensor[] = []
+      for (const layer of model.layers) {
+        if (layer.getClassName() === 'Dense') {
+          denseLayers.push(...layer.getWeights())
+        }
+      }
+
+      return { model, cam, denseWeights: denseLayers }
     })()
   }
   return camPromise
@@ -96,12 +103,12 @@ export interface EchoNextResult {
 }
 
 /**
- * Run the EchoNext CNN on a model input tensor (1, 32, 2500, 3).
+ * Run the EchoNext EfficientNetV2B0 on a model input tensor (1, 160, 160, 3).
  * Sigmoid output = P(HFpEF).
  */
 export async function predictEchoNext(tensor: Float32Array): Promise<EchoNextResult> {
   const model = await loadModel('echonext')
-  const t = tf.tensor4d(tensor, [1, 32, 2500, 3])
+  const t = tf.tensor4d(tensor, [1, 160, 160, 3])
   try {
     const out = model.predict(t) as tf.Tensor
     const p = (await out.data())[0]
@@ -126,12 +133,12 @@ export interface HFDetectResult {
 }
 
 /**
- * Run the HF Detection CNN on a model input tensor (1, 32, 1000, 1).
+ * Run the HF Detection EfficientNetV2B0 on a model input tensor (1, 224, 224, 3).
  * Sigmoid output = P(HF).
  */
 export async function predictHFDetect(tensor: Float32Array): Promise<HFDetectResult> {
   const model = await loadModel('hfdetect')
-  const t = tf.tensor4d(tensor, [1, 32, 1000, 1])
+  const t = tf.tensor4d(tensor, [1, 224, 224, 3])
   try {
     const out = model.predict(t) as tf.Tensor
     const pHF = (await out.data())[0]
@@ -143,30 +150,68 @@ export async function predictHFDetect(tensor: Float32Array): Promise<HFDetectRes
 }
 
 /* ------------------------------------------------------------------ */
-/*  Grad-CAM for EchoNext                                              */
+/*  Grad-CAM for EchoNext (EfficientNetV2B0)                           */
 /* ------------------------------------------------------------------ */
 
 /**
- * Grad-CAM over the last conv layer (conv2d_2), upscaled to (32, 2500)
- * and normalized to [0, 1]. Uses the manual tail (GAP -> Dense 64 -> Dense 1)
- * because tfjs cannot build a model from an intermediate tensor.
+ * Grad-CAM over the last conv layer (top_conv) of EfficientNetV2B0,
+ * upscaled to (160, 160) and normalized to [0, 1].
  */
 export async function computeGradCam(tensor: Float32Array): Promise<Float32Array> {
-  const { cam, w1, b1, w2, b2 } = await loadCam()
-  const t = tf.tensor4d(tensor, [1, 32, 2500, 3])
-  const gradFn = tf.grad((a: tf.Tensor) => {
-    const pooled = a.mean([1, 2]) as tf.Tensor
-    const h = pooled.matMul(w1).add(b1).relu() as tf.Tensor
-    const logit = h.matMul(w2).add(b2) as tf.Tensor
-    return logit.squeeze() as tf.Tensor
-  })
+  const { cam, denseWeights } = await loadCam()
+  const t = tf.tensor4d(tensor, [1, 160, 160, 3])
+
+  // Get the last conv layer output
   const A = cam.predict(t) as tf.Tensor
+  const aShape = A.shape
+  const aH = aShape[1] ?? 1
+  const aW = aShape[2] ?? 1
+
+  // Global average pooling manually
+  const pooled = A.mean([1, 2]) as tf.Tensor // (1, channels)
+
+  // Compute gradient of the output w.r.t. pooled features
+  const gradFn = tf.grad((x: tf.Tensor) => {
+    const p = x.mean([1, 2]) as tf.Tensor
+    let h = p
+    // Apply dense layers sequentially
+    for (let i = 0; i < denseWeights.length; i += 2) {
+      const w = denseWeights[i]
+      const b = denseWeights[i + 1]
+      h = h.matMul(w).add(b) as tf.Tensor
+      // Apply ReLU for all but last dense layer
+      if (i + 2 < denseWeights.length) {
+        h = h.relu() as tf.Tensor
+      }
+    }
+    return h.squeeze() as tf.Tensor
+  })
+
   const gA = gradFn(A)
+
+  // Channel-wise weighted sum
   const wc = gA.mean([1, 2]) as tf.Tensor
   const heat = tf.relu(A.mul(wc).sum(3)) as tf.Tensor
-  const up = tf.image.resizeBilinear(heat.squeeze().expandDims(-1), [32, 2500]) as tf.Tensor
-  const data = await up.data()
-  t.dispose(); A.dispose(); gA.dispose(); wc.dispose(); heat.dispose(); up.dispose()
+
+  // Upscale to (160, 160)
+  const up = tf.image
+    .resizeBilinear(heat.squeeze().expandDims(-1), [aH, aW])
+    .squeeze() as tf.Tensor
+
+  // Resize to input resolution
+  const final = tf.image.resizeBilinear(up.expandDims(-1), [160, 160]) as tf.Tensor
+  const data = await final.data()
+
+  t.dispose()
+  A.dispose()
+  pooled.dispose()
+  gA.dispose()
+  wc.dispose()
+  heat.dispose()
+  up.dispose()
+  final.dispose()
+
+  // Normalize to [0, 1]
   let mn = Infinity
   let mx = -Infinity
   for (let i = 0; i < data.length; i++) {

@@ -1,9 +1,25 @@
-import { cwtMexh } from './cwtMexh.ts'
+/**
+ * EchoNext model input builder — EfficientNetV2B0 version.
+ *
+ * Pipeline (replicating hfpef_hfref.ipynb):
+ *  1. Select leads I, II, V5 (indices 0, 1, 4 in 12-lead; duplicate if missing)
+ *  2. Resample to 250 Hz → 2500 samples
+ *  3. Downsample by factor 2 → 1250 samples
+ *  4. CWT Morlet (morl, scales 1-48) → magnitude (48, 1250)
+ *  5. Min-max normalization to [0, 1]
+ *  6. Bilinear resize to 160×160
+ *  7. Stack 3 channels → (160, 160, 3) → Float32Array
+ */
+
+import { cwtMorl } from './cwtMorl.ts'
+import { minmax2d } from './bandpass.ts'
 import type { Dataset } from './ecg.ts'
 
 export const MODEL_FS = 250
-export const MODEL_N = 2500
-export const MODEL_SCALES = 32
+export const MODEL_N = 1250 // after downsample from 2500
+export const MODEL_SCALES = 48
+export const MODEL_OUTPUT_SIZE = 160
+export const MODEL_DOWNSAMPLE = 2
 
 export interface ModelChannel {
   label: string
@@ -11,7 +27,7 @@ export interface ModelChannel {
 }
 
 export interface ModelInput {
-  /** (32, 2500, 3) row-major tensor ready for the CNN. */
+  /** (160*160*3) row-major tensor ready for the EfficientNetV2B0 CNN. */
   tensor: Float32Array
   channels: ModelChannel[]
   /** Index into `channels` that should be shown in the UI for the selected lead. */
@@ -19,104 +35,134 @@ export interface ModelInput {
   usedLeads: number[]
 }
 
-function mapLeads(nCols: number): number[] {
-  if (nCols >= 3) return [0, 1, Math.min(10, nCols - 1)]
+/**
+ * Find leads I, II, V5 from the dataset.
+ * Indices are based on standard 12-lead layout: I=0, II=1, III=2, aVR=3, aVL=4,
+ * aVF=5, V1=6, V2=7, V3=8, V4=9, V5=10, V6=11
+ */
+function findLeads(nCols: number): number[] {
+  // Default: I=0, II=1, V5=min(4, nCols-1)
+  if (nCols >= 12) return [0, 1, 10] // I, II, V5
+  if (nCols >= 3) return [0, 1, Math.min(2, nCols - 1)]
   if (nCols === 2) return [0, 1, 1]
   return [0, 0, 0]
 }
 
-/** Median filter (mirror edges) to match EchoNext waveform preprocessing. */
-function medianFilter(sig: Float32Array, k = 11): Float32Array {
-  const n = sig.length
-  const out = new Float32Array(n)
-  const half = Math.floor(k / 2)
-  const win = new Float32Array(k)
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < k; j++) {
-      let idx = i - half + j
-      if (idx < 0) idx = -idx
-      else if (idx >= n) idx = 2 * (n - 1) - idx
-      win[j] = sig[idx]
-    }
-    const sorted = Array.from(win).sort((a, b) => a - b)
-    out[i] = sorted[half]
+/**
+ * Resample a signal to a target length using linear interpolation.
+ */
+function resample(sig: Float32Array, targetLen: number): Float32Array {
+  if (sig.length === targetLen) return sig
+  const out = new Float32Array(targetLen)
+  const k = (sig.length - 1) / (targetLen - 1)
+  for (let i = 0; i < targetLen; i++) {
+    const pos = i * k
+    const i0 = Math.floor(pos)
+    const frac = pos - i0
+    const i1 = Math.min(sig.length - 1, i0 + 1)
+    out[i] = sig[i0] * (1 - frac) + sig[i1] * frac
   }
   return out
-}
-
-function windowed(sig: Float32Array, fs: number): Float32Array {
-  if (fs === MODEL_FS) {
-    if (sig.length >= MODEL_N) return sig.slice(0, MODEL_N)
-    const out = new Float32Array(MODEL_N)
-    out.set(sig)
-    return out
-  }
-  const dur = Math.min(sig.length / fs, 10)
-  const m = Math.max(1, Math.round(dur * fs))
-  const N = Math.max(1, Math.round(dur * MODEL_FS))
-  const out = new Float32Array(MODEL_N)
-  if (m === 1) {
-    for (let j = 0; j < N && j < MODEL_N; j++) out[j] = sig[0]
-  } else {
-    const k = (m - 1) / (N - 1)
-    for (let j = 0; j < N && j < MODEL_N; j++) {
-      const pos = j * k
-      const i0 = Math.floor(pos)
-      const frac = pos - i0
-      const i1 = Math.min(m - 1, i0 + 1)
-      out[j] = sig[i0] * (1 - frac) + sig[i1] * frac
-    }
-  }
-  return out
-}
-
-/** Percentile of |values| used for clipping (0.1/99.9 percentiles like EchoNext). */
-function percentile(vals: number[], p: number): number {
-  const s = vals.slice().sort((a, b) => a - b)
-  const idx = Math.min(s.length - 1, Math.floor(s.length * p))
-  return s[idx]
 }
 
 /**
- * Replicate EchoNext waveform preprocessing for a single recording:
- * median filter -> clip 0.1/99.9 percentiles -> z-score (approx. dataset-wide norm).
+ * Downsample by averaging adjacent samples.
  */
-function preprocessLead(sig: Float32Array, fs: number): Float32Array {
-  const w = medianFilter(windowed(sig, fs))
-  const lo = percentile(Array.from(w), 0.001)
-  const hi = percentile(Array.from(w), 0.999)
-  const clipped = new Float32Array(w.length)
-  for (let i = 0; i < w.length; i++) clipped[i] = Math.min(hi, Math.max(lo, w[i]))
-  let sum = 0
-  for (let i = 0; i < clipped.length; i++) sum += clipped[i]
-  const mean = sum / clipped.length
-  let sq = 0
-  for (let i = 0; i < clipped.length; i++) sq += (clipped[i] - mean) * (clipped[i] - mean)
-  const std = Math.sqrt(sq / clipped.length) || 1
-  const z = new Float32Array(clipped.length)
-  for (let i = 0; i < clipped.length; i++) z[i] = (clipped[i] - mean) / std
-  return z
+function downsample(sig: Float32Array, factor: number): Float32Array {
+  const outLen = Math.floor(sig.length / factor)
+  const out = new Float32Array(outLen)
+  for (let i = 0; i < outLen; i++) {
+    let sum = 0
+    for (let j = 0; j < factor; j++) {
+      sum += sig[i * factor + j]
+    }
+    out[i] = sum / factor
+  }
+  return out
 }
 
-export function buildEchoNextInput(ds: Dataset, fs: number, leadIdx: number): ModelInput {
-  const used = mapLeads(ds.cols.length)
-  const channels: ModelChannel[] = used.map((ci) => {
-    const col = ds.cols[ci]
-    const lead = preprocessLead(col, fs)
-    return { label: ds.names[ci] || `Lead ${ci + 1}`, mag: cwtMexh(lead) }
-  })
-  const disp = used.indexOf(leadIdx)
-  const tensor = new Float32Array(MODEL_SCALES * MODEL_N * 3)
-  for (let si = 0; si < MODEL_SCALES; si++) {
-    for (let t = 0; t < MODEL_N; t++) {
-      for (let ch = 0; ch < 3; ch++) {
-        tensor[si * (MODEL_N * 3) + t * 3 + ch] = channels[ch].mag[si * MODEL_N + t]
-      }
+/**
+ * Bilinear resize a 2D array (height × width) to (toH × toW).
+ */
+function resizeBilinear2D(
+  arr: Float32Array,
+  fromH: number,
+  fromW: number,
+  toH: number,
+  toW: number,
+): Float32Array {
+  const out = new Float32Array(toH * toW)
+  const xRatio = (fromW - 1) / (toW - 1)
+  const yRatio = (fromH - 1) / (toH - 1)
+  for (let y = 0; y < toH; y++) {
+    const fy = y * yRatio
+    const y0 = Math.floor(fy)
+    const y1 = Math.min(fromH - 1, y0 + 1)
+    const dy = fy - y0
+    for (let x = 0; x < toW; x++) {
+      const fx = x * xRatio
+      const x0 = Math.floor(fx)
+      const x1 = Math.min(fromW - 1, x0 + 1)
+      const dx = fx - x0
+      const v00 = arr[y0 * fromW + x0]
+      const v01 = arr[y0 * fromW + x1]
+      const v10 = arr[y1 * fromW + x0]
+      const v11 = arr[y1 * fromW + x1]
+      out[y * toW + x] =
+        v00 * (1 - dx) * (1 - dy) +
+        v01 * dx * (1 - dy) +
+        v10 * (1 - dx) * dy +
+        v11 * dx * dy
     }
   }
+  return out
+}
+
+export function buildEchoNextInput(
+  ds: Dataset,
+  fs: number,
+  _leadIdx: number,
+): ModelInput {
+  const used = findLeads(ds.cols.length)
+  const channels: ModelChannel[] = used.map((ci) => {
+    let col = ds.cols[ci]
+    const label = ds.names[ci] || `Lead ${ci + 1}`
+
+    // Step 1: Resample to 250 Hz → 2500 samples
+    let sig = resample(col, MODEL_FS * 10)
+
+    // Step 2: Downsample by factor 2 → 1250 samples
+    sig = downsample(sig, MODEL_DOWNSAMPLE)
+
+    // Step 3: CWT Morlet (48 scales, magnitude) → (48, 1250)
+    const scal = cwtMorl(sig, MODEL_SCALES)
+
+    // Step 4: Min-max normalization to [0, 1]
+    const scaled = minmax2d(scal)
+
+    // Step 5: Resize to 160×160
+    const resized = resizeBilinear2D(
+      scaled,
+      MODEL_SCALES,
+      MODEL_N,
+      MODEL_OUTPUT_SIZE,
+      MODEL_OUTPUT_SIZE,
+    )
+
+    return { label, mag: resized }
+  })
+
+  const disp = used.indexOf(_leadIdx)
+  const tensor = new Float32Array(MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE * 3)
+  for (let ch = 0; ch < 3; ch++) {
+    const offset = ch * MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE
+    for (let i = 0; i < channels[ch].mag.length; i++) {
+      tensor[offset + i] = channels[ch].mag[i]
+    }
+  }
+
   return { tensor, channels, displayIdx: disp >= 0 ? disp : 1, usedLeads: used }
 }
 
 /** @deprecated Use buildEchoNextInput instead. */
 export const buildModelInput = buildEchoNextInput
-
