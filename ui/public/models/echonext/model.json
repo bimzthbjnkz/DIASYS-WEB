@@ -8,7 +8,7 @@
     "model_config": {
       "class_name": "Functional",
       "config": {
-        "name": "functional_3",
+        "name": "functional",
         "trainable": true,
         "layers": [
           {
@@ -29,22 +29,15 @@
             "inbound_nodes": []
           },
           {
-            "class_name": "Lambda",
+            "class_name": "Rescaling",
             "config": {
-              "name": "lambda_3",
+              "name": "rescale_m1_1",
               "trainable": true,
               "dtype": "float32",
-              "function": {
-                "class_name": "__lambda__",
-                "config": {
-                  "code": "4wEAAAAAAAAAAAAAAAIAAAATAAAA8xIAAACXAHwAZAF6BQAAZAJ6CgAAUwApA05nAAAAAAAAAEBn\nAAAAAAAA8D+pACkB2gF6cwEAAAAgeiEvdG1wL2lweWtlcm5lbF8xMTA1LzE1NjgyMTA2ODEucHna\nCDxsYW1iZGE++i5idWlsZF9oZnBlZl9oZnJlZl9jbGFzc2lmaWVyLjxsb2NhbHM+LjxsYW1iZGE+\nHwAAAHMMAAAAgACgEaBToReoQ6IP8wAAAAA=\n",
-                  "defaults": null,
-                  "closure": null
-                }
-              },
-              "arguments": {}
+              "scale": 2.0,
+              "offset": -1.0
             },
-            "name": "lambda_3",
+            "name": "rescale_m1_1",
             "inbound_nodes": [
               {
                 "args": [
@@ -66,9 +59,7 @@
                     }
                   }
                 ],
-                "kwargs": {
-                  "mask": null
-                }
+                "kwargs": {}
               }
             ]
           },
@@ -14605,7 +14596,7 @@
                       ],
                       "dtype": "float32",
                       "keras_history": [
-                        "lambda_3",
+                        "rescale_m1_1",
                         0,
                         0
                       ]
@@ -14613,7 +14604,6 @@
                   }
                 ],
                 "kwargs": {
-                  "training": false,
                   "mask": null
                 }
               }
@@ -14904,71 +14894,6 @@
           0,
           0
         ]
-      }
-    },
-    "training_config": {
-      "loss": "binary_crossentropy",
-      "loss_weights": null,
-      "metrics": [
-        "accuracy",
-        {
-          "class_name": "AUC",
-          "config": {
-            "name": "auc",
-            "dtype": "float32",
-            "num_thresholds": 200,
-            "curve": "ROC",
-            "summation_method": "interpolation",
-            "multi_label": false,
-            "num_labels": null,
-            "label_weights": null,
-            "from_logits": false
-          }
-        },
-        {
-          "class_name": "Recall",
-          "config": {
-            "name": "sensitivity",
-            "dtype": "float32",
-            "thresholds": null,
-            "top_k": null,
-            "class_id": null
-          }
-        },
-        {
-          "class_name": "Precision",
-          "config": {
-            "name": "precision",
-            "dtype": "float32",
-            "thresholds": null,
-            "top_k": null,
-            "class_id": null
-          }
-        }
-      ],
-      "weighted_metrics": null,
-      "run_eagerly": false,
-      "steps_per_execution": 1,
-      "jit_compile": false,
-      "optimizer_config": {
-        "class_name": "Adam",
-        "config": {
-          "name": "adam",
-          "learning_rate": 0.0001250000059371814,
-          "weight_decay": null,
-          "clipnorm": null,
-          "global_clipnorm": null,
-          "clipvalue": null,
-          "use_ema": false,
-          "ema_momentum": 0.99,
-          "ema_overwrite_frequency": null,
-          "loss_scale_factor": null,
-          "gradient_accumulation_steps": null,
-          "beta_1": 0.9,
-          "beta_2": 0.999,
-          "epsilon": 1e-07,
-          "amsgrad": false
-        }
       }
     }
   },

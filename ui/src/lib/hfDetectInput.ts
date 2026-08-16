@@ -32,38 +32,60 @@ export interface HFDetectInput {
 /**
  * Find leads II, V2, V5 from the dataset.
  * Falls back to duplicating available leads if not all are found.
+ *
+ * Supports both 12-lead (I, II, III, aVR, aVL, aVF, V1-V6)
+ * and 8-lead (aVL, aVF, V1-V6) formats.
  */
 function findLeads(ds: Dataset): number[] {
   const result: number[] = []
-  const patterns = [
-    ['ii', 'lead ii', 'leadii', 'lead_ii'],
-    ['v2', 'lead v2', 'leadv2', 'lead_v2'],
-    ['v5', 'lead v5', 'leadv5', 'lead_v5'],
+  // Patterns for each target lead: II, V2, V5
+  // Each sub-array has patterns to match (case-insensitive, after removing separators)
+  const targets = [
+    ['ii', 'leadii', 'lead_ii', 'lead ii', 'ii_'],
+    ['v2', 'leadv2', 'lead_v2', 'lead v2', 'v2_'],
+    ['v5', 'leadv5', 'lead_v5', 'lead v5', 'v5_'],
   ]
 
-  for (const pats of patterns) {
+  for (const pats of targets) {
     let found = -1
+    // Try name-based matching first (exact match)
     for (let i = 0; i < ds.names.length; i++) {
-      const n = ds.names[i].toLowerCase().replace(/[\s_-]/g, '')
+      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
       for (const pat of pats) {
-        if (n === pat.replace(/[\s_-]/g, '')) {
+        if (n === pat.replace(/[\s_\-]/g, '')) {
           found = i
           break
         }
       }
       if (found >= 0) break
     }
-    // Also check by index for common 12-lead layouts
+
+    // If not found, try substring matching for 8-lead formats
+    // e.g., "Lead_V2" contains "v2", "Lead_aVL" contains "avl"
     if (found < 0) {
-      const idx = patterns.indexOf(pats)
-      if (idx === 0 && ds.cols.length > 1) found = 1 // Lead II is typically index 1
-      if (idx === 1 && ds.cols.length > 12) found = 11 // V2 is typically index 11
-      if (idx === 2 && ds.cols.length > 14) found = 13 // V5 is typically index 13
+      const searchKey = pats[0] // primary pattern, e.g., "ii", "v2", "v5"
+      for (let i = 0; i < ds.names.length; i++) {
+        const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+        if (n.includes(searchKey)) {
+          found = i
+          break
+        }
+      }
     }
+
     result.push(found)
   }
 
-  // If not all leads found, duplicate the first available lead
+  // Fallback: try index-based matching for standard 12-lead layout
+  // Standard order: I=0, II=1, III=2, aVR=3, aVL=4, aVF=5, V1=6, V2=7, V3=8, V4=9, V5=10, V6=11
+  const fallbackIndices = [1, 7, 10] // II, V2, V5 in standard 12-lead
+  for (let i = 0; i < 3; i++) {
+    if (result[i] < 0 && fallbackIndices[i] < ds.cols.length) {
+      result[i] = fallbackIndices[i]
+    }
+  }
+
+  // If still not all leads found, duplicate the first available lead
   const firstAvailable = result.find((r) => r >= 0) ?? 0
   return result.map((r) => (r >= 0 && r < ds.cols.length ? r : firstAvailable))
 }
