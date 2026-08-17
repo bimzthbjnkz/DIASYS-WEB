@@ -15,28 +15,61 @@ class Normalization extends tf.layers.Layer {
   private readonly meanData: number[]
   private readonly varianceData: number[]
   private readonly axis: number[]
+  private readonly invert: boolean
 
   constructor(config: {
     mean?: number[]
     variance?: number[]
     axis?: number[]
+    invert?: boolean
     name?: string
   }) {
     super({ name: config.name ?? 'normalization_1', trainable: false, ...config })
     this.meanData = config.mean ?? []
     this.varianceData = config.variance ?? []
     this.axis = config.axis ?? [3]
+    this.invert = config.invert ?? false
   }
 
-  override call(inputs: tf.Tensor[]): tf.Tensor {
+  override call(inputs: tf.Tensor[], kwargs: Record<string, unknown>): tf.Tensor | tf.Tensor[] {
     const input = Array.isArray(inputs) ? inputs[0] : inputs
-    const mean = tf.tensor1d(this.meanData)
-    const variance = tf.tensor1d(this.varianceData)
-    const std = tf.sqrt(variance)
-    const result = input.sub(mean).div(std)
+    const inputShape = input.shape
+    const rank = inputShape.length
+    const axis = this.axis.map((a) => (a < 0 ? a + rank : a))
+
+    let mean = tf.tensor1d(this.meanData)
+    let variance = tf.tensor1d(this.varianceData)
+    let std = tf.sqrt(variance)
+
+    // Reshape mean and variance for broadcasting: [1, 1, 1, C] for 4D input
+    if (rank === 4) {
+      // For 4D tensor (batch, height, width, channels)
+      // Reshape to [1, 1, 1, channels] for proper broadcasting
+      const reshapeShape = [1, 1, 1, this.meanData.length]
+      mean = mean.reshape(reshapeShape)
+      variance = variance.reshape(reshapeShape)
+      std = std.reshape(reshapeShape)
+    } else if (rank === 3) {
+      // For 3D tensor (height, width, channels)
+      const reshapeShape = [1, 1, this.meanData.length]
+      mean = mean.reshape(reshapeShape)
+      variance = variance.reshape(reshapeShape)
+      std = std.reshape(reshapeShape)
+    }
+
+    let result: tf.Tensor
+    if (this.invert) {
+      // Invert: output = input * std + mean
+      result = input.mul(std).add(mean)
+    } else {
+      // Standard: output = (input - mean) / std
+      result = input.sub(mean).div(std)
+    }
+
     mean.dispose()
     variance.dispose()
     std.dispose()
+
     return result
   }
 
@@ -49,6 +82,7 @@ class Normalization extends tf.layers.Layer {
     config.mean = this.meanData
     config.variance = this.varianceData
     config.axis = this.axis
+    config.invert = this.invert
     return config
   }
 }
