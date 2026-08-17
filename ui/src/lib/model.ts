@@ -89,6 +89,26 @@ class Normalization extends tf.layers.Layer {
 
 tf.serialization.registerClass(Normalization)
 
+/* ------------------------------------------------------------------ */
+/*  Custom SiLU activation — identical to swish: x * sigmoid(x)        */
+/*  Keras exports "silu" but TF.js only knows "swish"                  */
+/* ------------------------------------------------------------------ */
+
+class Silu extends tf.layers.Layer {
+  static readonly className = 'silu'
+
+  override call(inputs: tf.Tensor[]): tf.Tensor {
+    const x = Array.isArray(inputs) ? inputs[0] : inputs
+    return x.mul(tf.sigmoid(x))
+  }
+
+  override computeOutputShape(inputShape: tf.Shape): tf.Shape {
+    return inputShape
+  }
+}
+
+tf.serialization.registerClass(Silu)
+
 interface ModelEntry {
   url: string
   instance: tf.LayersModel | null
