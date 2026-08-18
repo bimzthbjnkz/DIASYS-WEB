@@ -48,7 +48,7 @@ function getWorker(): Worker | null {
 async function runInWorker(
   modelName: string,
   tensor: Float32Array,
-  shape: number[],
+  shape: [number, number, number, number],
 ): Promise<Float32Array> {
   const w = getWorker()
   if (!w) {
@@ -63,8 +63,27 @@ async function runInWorker(
 
   return new Promise<Float32Array>((resolve, reject) => {
     const id = nextId++
-    pending.set(id, { resolve, reject })
-    w.postMessage({ id, modelName, tensorData: tensor, shape })
+    const timer = setTimeout(() => {
+      if (pending.has(id)) {
+        pending.delete(id)
+        reject(new Error(`Batas waktu inferensi (${modelName}) terlampaui (timeout).`))
+      }
+    }, 120000)
+
+    pending.set(id, {
+      resolve: (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      reject: (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+    })
+    // Keep the caller's tensor intact. EchoNext may reuse it for Grad-CAM after
+    // inference; transferring the original buffer would detach it.
+    const tensorData = tensor.slice()
+    w.postMessage({ id, modelName, tensorData, shape }, [tensorData.buffer])
   })
 }
 
@@ -84,6 +103,16 @@ export async function predictEchoNextWorker(
   const result = await runInWorker('echonext', tensor, [1, 160, 160, 3])
   const pHFpEF = result[0]
   return { pHFpEF, pHFrEF: 1 - pHFpEF }
+}
+
+/** Warm both models in the background so the first analysis avoids model download and compilation. */
+export function preloadInferenceModels(): void {
+  void Promise.all([
+    runInWorker('hfdetect', new Float32Array(224 * 224 * 3), [1, 224, 224, 3]),
+    runInWorker('echonext', new Float32Array(160 * 160 * 3), [1, 160, 160, 3]),
+  ]).catch(() => {
+    // Preloading is an optimization; the actual analysis reports inference errors.
+  })
 }
 
 /** Terminate the worker (call on app unmount or when no longer needed). */

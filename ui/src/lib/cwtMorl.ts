@@ -1,7 +1,7 @@
 import { MORL_INT_PSI_B64, MORL_STEP, MORL_SPAN } from './morl_kernel.ts'
 
 let INT_PSI: Float64Array | null = null
-let FILTERS: Float64Array[] | null = null
+let FILTERS: Float32Array[] | null = null
 
 function decodeIntPsi(): Float64Array {
   const bin = atob(MORL_INT_PSI_B64)
@@ -15,23 +15,24 @@ function decodeIntPsi(): Float64Array {
  * Build per-scale filters from the pre-computed Morlet integral wavelet.
  * Filters are cached since they depend only on the wavelet, not the signal.
  */
-function buildFilters(nScales: number): Float64Array[] {
+function buildFilters(nScales: number): Float32Array[] {
   if (FILTERS && FILTERS.length >= nScales) return FILTERS
   if (!INT_PSI) INT_PSI = decodeIntPsi()
   const step = MORL_STEP
   const span = MORL_SPAN
-  const out: Float64Array[] = new Array(nScales)
+  const out: Float32Array[] = new Array(nScales)
   for (let si = 0; si < nScales; si++) {
     const s = si + 1 // scales are 1-based
     const m = Math.floor(s * span) + 1
-    const f = new Float64Array(m)
+    const f = new Float32Array(m - 1)
     const denom = s * step
-    for (let n = 0; n < m; n++) {
-      const idx = Math.floor(n / denom)
-      f[n] = INT_PSI[idx]
+    for (let n = 0; n < m - 1; n++) {
+      const idx0 = Math.floor(n / denom)
+      const idx1 = Math.floor((n + 1) / denom)
+      f[n] = INT_PSI[idx1] - INT_PSI[idx0]
     }
-    // Reverse in place to match int_psi[j][::-1]
-    for (let i = 0, j = m - 1; i < j; i++, j--) {
+    // Reverse in place to match the original integral-wavelet difference.
+    for (let i = 0, j = f.length - 1; i < j; i++, j--) {
       const t = f[i]
       f[i] = f[j]
       f[j] = t
@@ -55,7 +56,7 @@ export function cwtMorl(sig: Float32Array, nScales = 31): Float32Array {
   const out = new Float32Array(nScales * n)
   for (let si = 0; si < nScales; si++) {
     const f = filters[si]
-    const m = f.length
+    const m = f.length + 1
     const scaleFactor = -Math.sqrt(si + 1)
     const coefLen = n + m - 2
     const d = (m - 2) / 2
@@ -67,7 +68,7 @@ export function cwtMorl(sig: Float32Array, nScales = 31): Float32Array {
       const j0 = Math.max(0, k + 1 - (m - 1))
       const j1 = Math.min(n - 1, k)
       for (let i = j0; i <= j1; i++) {
-        re += sig[i] * (f[k + 1 - i] - f[k - i])
+        re += sig[i] * f[k - i]
       }
       out[si * n + oi++] = Math.abs(scaleFactor * re)
     }
@@ -90,7 +91,7 @@ export async function cwtMorlAsync(
   const out = new Float32Array(nScales * n)
   for (let si = 0; si < nScales; si++) {
     const f = filters[si]
-    const m = f.length
+    const m = f.length + 1
     const scaleFactor = -Math.sqrt(si + 1)
     const coefLen = n + m - 2
     const d = (m - 2) / 2
@@ -102,7 +103,7 @@ export async function cwtMorlAsync(
       const j0 = Math.max(0, k + 1 - (m - 1))
       const j1 = Math.min(n - 1, k)
       for (let i = j0; i <= j1; i++) {
-        re += sig[i] * (f[k + 1 - i] - f[k - i])
+        re += sig[i] * f[k - i]
       }
       out[si * n + oi++] = Math.abs(scaleFactor * re)
     }

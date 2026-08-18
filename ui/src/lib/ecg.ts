@@ -161,7 +161,7 @@ export interface Dataset {
 export function getSignal(dataset: Dataset, fs: number, leadIdx: number): { raw: Float32Array; fs: number } {
   const col = dataset.cols[leadIdx]
   const scale = pickScale(col)
-  const cap = Math.min(col.length, Math.floor(12 * fs))
+  const cap = Math.min(col.length, Math.floor(10 * fs))
   const raw = new Float32Array(cap)
   for (let i = 0; i < cap; i++) raw[i] = col[i] * scale
   return { raw, fs }

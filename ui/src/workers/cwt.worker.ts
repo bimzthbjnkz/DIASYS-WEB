@@ -17,15 +17,14 @@ interface CWTRequest {
   nScales: number
 }
 
-self.onmessage = async (e: MessageEvent<CWTRequest>) => {
+self.onmessage = (e: MessageEvent<CWTRequest>) => {
   const { id, signal, nScales } = e.data
   try {
-    // The async version yields to the event loop, keeping the worker
-    // responsive to cancel messages if needed in the future.
-    // But since worker doesn't need UI, we use the sync version for speed.
-    // We still post progress by chunking manually.
+    // This worker is already off the UI thread; yielding with setTimeout only
+    // adds latency to every few scales without improving responsiveness.
     const result = cwtMorl(signal, nScales)
-    self.postMessage({ id, result })
+    self.postMessage({ id, progress: { done: nScales, total: nScales } })
+    self.postMessage({ id, result }, { transfer: [result.buffer as ArrayBuffer] })
   } catch (err) {
     self.postMessage({ id, error: err instanceof Error ? err.message : String(err) })
   }

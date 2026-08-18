@@ -7,19 +7,23 @@
 
 import { cwtMorlAsync } from './cwtMorl'
 
-let worker: Worker | null = null
+const workers: Worker[] = []
 let nextId = 1
-const pending = new Map<number, { resolve: (v: Float32Array) => void; reject: (e: Error) => void }>()
+let nextWorker = 0
+const pending = new Map<number, { resolve: (v: Float32Array) => void; reject: (e: Error) => void; onProgress?: (done: number, total: number) => void }>()
 
-function getWorker(): Worker | null {
+function createWorker(): Worker | null {
   if (typeof Worker === 'undefined') return null
-  if (worker) return worker
   try {
-    worker = new Worker(new URL('../workers/cwt.worker.ts', import.meta.url), { type: 'module' })
-    worker.onmessage = (e) => {
-      const { id, result, error } = e.data
+    const current = new Worker(new URL('../workers/cwt.worker.ts', import.meta.url), { type: 'module' })
+    current.onmessage = (e) => {
+      const { id, result, error, progress } = e.data
       const p = pending.get(id)
       if (!p) return
+      if (progress) {
+        p.onProgress?.(progress.done, progress.total)
+        return
+      }
       pending.delete(id)
       if (error) {
         p.reject(new Error(error))
@@ -27,18 +31,25 @@ function getWorker(): Worker | null {
         p.resolve(result)
       }
     }
-    worker.onerror = (e) => {
+    current.onerror = (e) => {
       // Reject all pending on worker crash
       for (const [id, p] of pending) {
         p.reject(new Error('CWT worker crashed: ' + e.message))
         pending.delete(id)
       }
-      worker = null
+      const index = workers.indexOf(current)
+      if (index >= 0) workers.splice(index, 1)
     }
-    return worker
+    workers.push(current)
+    return current
   } catch {
     return null
   }
+}
+
+function getWorker(): Worker | null {
+  // Three workers allow the three independent ECG leads to be transformed concurrently.
+  return workers[nextWorker++ % 3] ?? createWorker()
 }
 
 /**
@@ -61,19 +72,32 @@ export async function cwtMorlWorker(
 
   return new Promise<Float32Array>((resolve, reject) => {
     const id = nextId++
-    pending.set(id, { resolve, reject })
-    w.postMessage({ id, signal, nScales })
+    const timer = setTimeout(() => {
+      if (pending.has(id)) {
+        pending.delete(id)
+        reject(new Error('Batas waktu komputasi CWT terlampaui (timeout).'))
+      }
+    }, 45000)
+
+    pending.set(id, {
+      resolve: (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      reject: (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+      onProgress,
+    })
+    w.postMessage({ id, signal, nScales }, [signal.buffer])
   })
 }
 
 /** Terminate the worker (call on app unmount or when no longer needed). */
 export function terminateCwtWorker(): void {
-  if (worker) {
-    worker.terminate()
-    worker = null
-    for (const [, p] of pending) {
-      p.reject(new Error('CWT worker terminated'))
-    }
-    pending.clear()
-  }
+  for (const current of workers) current.terminate()
+  workers.length = 0
+  for (const [, p] of pending) p.reject(new Error('CWT worker terminated'))
+  pending.clear()
 }

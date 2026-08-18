@@ -37,30 +37,27 @@ export interface ModelInput {
 }
 
 /**
- * Find leads I, II, V5 from the dataset.
+ * Find leads I, II, aVL from the dataset (corresponding to [0, 1, 4] in EchoNext training).
  * Tries name-based matching first, then falls back to index-based matching
  * for standard 12-lead layout: I=0, II=1, III=2, aVR=3, aVL=4, aVF=5,
  * V1=6, V2=7, V3=8, V4=9, V5=10, V6=11
- *
- * Supports both 12-lead (I, II, III, aVR, aVL, aVF, V1-V6)
- * and 8-lead (aVL, aVF, V1-V6) formats.
  */
 function findLeads(ds: Dataset): number[] {
   const result: number[] = []
-  // Patterns for each target lead: I, II, V5
+  // Patterns for each target lead: I, II, aVL (matching [0, 1, 4] in hfpef_hfref.ipynb)
   const targets = [
     ['i', 'leadi', 'lead_i', 'lead i', 'lead1'],
     ['ii', 'leadii', 'lead_ii', 'lead ii', 'lead2'],
-    ['v5', 'leadv5', 'lead_v5', 'lead v5', 'lead11'],
+    ['avl', 'leadavl', 'lead_avl', 'lead avl', 'lead5'],
   ]
 
   for (const pats of targets) {
     let found = -1
     // Try name-based matching first (exact match)
     for (let i = 0; i < ds.names.length; i++) {
-      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+      const n = ds.names[i].toLowerCase().replace(/[\s_-]/g, '')
       for (const pat of pats) {
-        if (n === pat.replace(/[\s_\-]/g, '')) {
+        if (n === pat.replace(/[\s_-]/g, '')) {
           found = i
           break
         }
@@ -68,12 +65,11 @@ function findLeads(ds: Dataset): number[] {
       if (found >= 0) break
     }
 
-    // If not found, try substring matching for 8-lead formats
-    // e.g., "Lead_V5" contains "v5"
+    // If not found, try substring matching
     if (found < 0) {
-      const searchKey = pats[0] // primary pattern, e.g., "i", "ii", "v5"
+      const searchKey = pats[0]
       for (let i = 0; i < ds.names.length; i++) {
-        const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+        const n = ds.names[i].toLowerCase().replace(/[\s_-]/g, '')
         if (n.includes(searchKey)) {
           found = i
           break
@@ -84,8 +80,8 @@ function findLeads(ds: Dataset): number[] {
     result.push(found)
   }
 
-  // Fallback: try index-based matching for standard 12-lead layout
-  const fallbackIndices = [0, 1, 10] // I, II, V5 in standard 12-lead
+  // Fallback: try index-based matching for standard 12-lead layout: [0, 1, 4]
+  const fallbackIndices = [0, 1, 4] // I, II, aVL in standard 12-lead
   for (let i = 0; i < 3; i++) {
     if (result[i] < 0 && fallbackIndices[i] < ds.cols.length) {
       result[i] = fallbackIndices[i]
@@ -119,17 +115,13 @@ function resample(sig: Float32Array, targetLen: number): Float32Array {
 }
 
 /**
- * Downsample by averaging adjacent samples.
+ * Downsample by decimation (taking every factor-th sample, replicating Python signal[::factor]).
  */
 function downsample(sig: Float32Array, factor: number): Float32Array {
   const outLen = Math.floor(sig.length / factor)
   const out = new Float32Array(outLen)
   for (let i = 0; i < outLen; i++) {
-    let sum = 0
-    for (let j = 0; j < factor; j++) {
-      sum += sig[i * factor + j]
-    }
-    out[i] = sum / factor
+    out[i] = sig[i * factor]
   }
   return out
 }
@@ -173,7 +165,7 @@ function resizeBilinear2D(
 
 export function buildEchoNextInput(
   ds: Dataset,
-  fs: number,
+  _fs: number,
   _leadIdx: number,
 ): ModelInput {
   const used = findLeads(ds)
@@ -208,9 +200,8 @@ export function buildEchoNextInput(
   const disp = used.indexOf(_leadIdx)
   const tensor = new Float32Array(MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE * 3)
   for (let ch = 0; ch < 3; ch++) {
-    const offset = ch * MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE
     for (let i = 0; i < channels[ch].mag.length; i++) {
-      tensor[offset + i] = channels[ch].mag[i]
+      tensor[i * 3 + ch] = channels[ch].mag[i]
     }
   }
 
@@ -226,15 +217,13 @@ export const buildModelInput = buildEchoNextInput
  */
 export async function buildEchoNextInputAsync(
   ds: Dataset,
-  fs: number,
+  _fs: number,
   _leadIdx: number,
   onCwtProgress?: (ch: number, done: number, total: number) => void,
 ): Promise<ModelInput> {
   const used = findLeads(ds)
-  const channels: ModelChannel[] = []
-
-  for (let ci = 0; ci < used.length; ci++) {
-    const col = ds.cols[used[ci]]
+  const channels = await Promise.all(used.map(async (leadIndex, ci) => {
+    const col = ds.cols[leadIndex]
     const label = ds.names[used[ci]] || `Lead ${used[ci] + 1}`
 
     let sig = resample(col, MODEL_FS * 10)
@@ -246,15 +235,14 @@ export async function buildEchoNextInputAsync(
 
     const scaled = minmax2d(scal)
     const resized = resizeBilinear2D(scaled, MODEL_SCALES, MODEL_N, MODEL_OUTPUT_SIZE, MODEL_OUTPUT_SIZE)
-    channels.push({ label, mag: resized })
-  }
+    return { label, mag: resized }
+  }))
 
   const disp = used.indexOf(_leadIdx)
   const tensor = new Float32Array(MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE * 3)
   for (let ch = 0; ch < 3; ch++) {
-    const offset = ch * MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE
     for (let i = 0; i < channels[ch].mag.length; i++) {
-      tensor[offset + i] = channels[ch].mag[i]
+      tensor[i * 3 + ch] = channels[ch].mag[i]
     }
   }
 

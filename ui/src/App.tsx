@@ -10,6 +10,7 @@ import { useToasts } from './hooks/useToasts'
 import { useAnalysis } from './hooks/useAnalysis'
 import { downloadReport } from './lib/report'
 import { fmtPct } from './lib/format'
+import { preloadInferenceModels } from './lib/inferenceWorkerClient'
 import type { ReportEntry } from './lib/report'
 
 interface SeedEntry {
@@ -45,6 +46,10 @@ export default function App() {
   )
 
   const a = useAnalysis({ toast, onNewEntry })
+
+  useEffect(() => {
+    preloadInferenceModels()
+  }, [])
 
   useEffect(() => {
     if (view !== 'analisis') window.scrollTo({ top: 0, behavior: 'smooth' })

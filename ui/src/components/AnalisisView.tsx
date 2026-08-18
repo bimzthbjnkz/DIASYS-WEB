@@ -34,13 +34,13 @@ function UploadCard({ a }: UploadCardProps) {
   const dataMeta = (() => {
     if (!a.dataset) return null
     const col = a.dataset.cols[a.lead]
-    const used = Math.min(col.length, Math.floor(12 * a.fs))
-    const extra = col.length > used ? ' · diambil 12 s pertama' : ''
+    const used = Math.min(col.length, Math.floor(10 * a.fs))
+    const extra = col.length > used ? ' · diproses 10 s pertama' : ''
     return `${a.dataset.cols.length} kanal · ${toLocaleId(col.length)} sampel · ±${(col.length / a.fs).toFixed(1)} s${extra} · ${a.dataset.note}`
   })()
 
   return (
-    <Card title="1 · Sumber Data EKG" hint="maks. 12 detik diproses">
+    <Card title="1 · Sumber Data EKG" hint="standar 10 detik">
       <div
         className={`rounded-[8px] border-[1.5px] border-dashed p-[30px_18px] text-center transition-colors duration-200 ${
           dragging.current
@@ -126,72 +126,42 @@ function UploadCard({ a }: UploadCardProps) {
             </button>
           </div>
 
-          <div className="mb-4 flex flex-wrap items-end gap-[14px]">
-            <label className="field">
-              <span>Sampling rate</span>
-              <select
-                value={a.fs}
-                onChange={(e) => a.setFs(Number(e.target.value))}
-                disabled={a.running || (a.dataset && a.dataset.kind !== 'upload')}
-              >
-                {FSS_OPTIONS.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {a.leadOptions.length > 1 && (
-              <label className="field">
-                <span>Lead / kanal</span>
-                <select value={a.lead} onChange={(e) => a.setLead(Number(e.target.value))} disabled={a.running}>
-                  {a.leadOptions.map((o) => (
-                    <option key={o.i} value={o.i}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {a.hfLeadOptions.length > 1 && (
-              <label className="field">
-                <span>Lead untuk HF Detection</span>
-                <select
-                  value={a.hfLeadsOverride ? a.hfLeadsOverride.join(',') : 'auto'}
-                  onChange={(e) => {
-                    if (e.target.value === 'auto') {
-                      a.setHfLeadsOverride(null)
-                    } else {
-                      a.setHfLeadsOverride(e.target.value.split(',').map(Number))
-                    }
-                  }}
-                  disabled={a.running}
-                >
-                  {a.hfLeadOptions.map((o, i) => (
-                    <option key={i} value={o.isAuto ? 'auto' : o.indices.join(',')}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <label className="field">
-              <span>Kalibrasi unit</span>
-              <span className="unit-pill">{a.unitNote}</span>
-            </label>
+          {/* Spesifikasi Pra-pemrosesan Otomatis */}
+          <div className="mb-4 rounded-xl border border-[rgba(11,138,99,0.2)] bg-[rgba(11,138,99,0.04)] p-3.5 text-[12px]">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-semibold text-[#0B8A63] flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-[#0B8A63]" />
+                Pra-pemrosesan AI Terkonfigurasi Otomatis
+              </span>
+              <span className="rounded-md bg-[rgba(11,138,99,0.12)] px-2 py-0.5 text-[10.5px] font-semibold text-[#0B8A63]">
+                {a.fs} Hz · {a.unitNote}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 pt-2 border-t border-[rgba(11,138,99,0.12)] text-[#3E5047]">
+              <div>
+                <b className="text-[#0E1F19] text-[11.5px] block">Tahap 1: HF Detection</b>
+                <p className="text-[11px] text-[#54655D] mt-0.5 leading-relaxed">
+                  Lead II, V2, V5 · 100 Hz (10s) · Z-score + CWT Morlet (31 skala) → 224×224
+                </p>
+              </div>
+              <div>
+                <b className="text-[#0E1F19] text-[11.5px] block">Tahap 2: EchoNext (HFpEF vs HFrEF)</b>
+                <p className="text-[11px] text-[#54655D] mt-0.5 leading-relaxed">
+                  Lead I, II, aVL · 125 Hz (10s) · CWT Morlet (48 skala) → 160×160
+                </p>
+              </div>
+            </div>
           </div>
 
           <button className="btn btn-primary w-full" onClick={a.runAnalysis} disabled={a.running}>
             <PlayIcon className="h-4 w-4" />
-            {a.running ? 'Memproses…' : a.lastEntry ? 'Jalankan Ulang' : 'Jalankan Analisis'}
+            {a.running ? 'Memproses Inferensi Otomatis…' : a.lastEntry ? 'Jalankan Ulang Analisis' : 'Jalankan Analisis AI'}
           </button>
         </div>
       )}
     </Card>
   )
 }
-
-const FSS_OPTIONS = [128, 200, 250, 256, 360, 500]
 
 interface SignalSectionProps {
   a: UseAnalysisReturn
@@ -252,9 +222,11 @@ function ScalogramSection({ a }: ScalogramSectionProps) {
           Overlay Grad-CAM
         </label>
       </div>
-      <div className="mt-3 font-mono text-[11px] font-medium text-[#7FA394]">
-        Wavelet mexican-hat · 32 skala (1–32) · 3 lead (I, II, V5) · pita ≈2–62 Hz
-      </div>
+      {a.scal && (
+        <div className="mt-3 font-mono text-[11px] font-medium text-[#7FA394]">
+          Wavelet Morlet · {a.scal.ns} skala · {a.scal.T} sampel · sampling CWT {a.scal.fs} Hz
+        </div>
+      )}
     </Card>
   )
 }

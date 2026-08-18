@@ -123,6 +123,12 @@ export function siForFreq(sc: ScalResult, f: number): number {
     const scale = (0.25 * sc.fs) / f
     return scale - 1
   }
+  // The model scalogram uses integer scales [1..N], not the logarithmic
+  // scale grid used by the landing-page visualization.
+  if (sc.ratio === 1) {
+    const scale = (0.8125 * sc.fs) / f // pywt.central_frequency('morl')
+    return scale - 1
+  }
   return Math.log((0.968 * sc.fs) / f / sc.a0) / Math.log(sc.ratio)
 }
 

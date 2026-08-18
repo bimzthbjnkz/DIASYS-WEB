@@ -47,15 +47,15 @@ const LEAD_COMBOS: string[][] = [
  */
 function findLeadByName(ds: Dataset, patterns: string[]): number {
   for (const pat of patterns) {
-    const key = pat.toLowerCase().replace(/[\s_\-]/g, '')
+    const key = pat.toLowerCase().replace(/[\s_-]/g, '')
     // Exact match
     for (let i = 0; i < ds.names.length; i++) {
-      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+      const n = ds.names[i].toLowerCase().replace(/[\s_-]/g, '')
       if (n === key) return i
     }
     // Substring match
     for (let i = 0; i < ds.names.length; i++) {
-      const n = ds.names[i].toLowerCase().replace(/[\s_\-]/g, '')
+      const n = ds.names[i].toLowerCase().replace(/[\s_-]/g, '')
       if (n.includes(key)) return i
     }
   }
@@ -208,8 +208,8 @@ export function buildHFDetectInput(ds: Dataset, fs: number, leadOverride?: numbe
   for (let ch = 0; ch < 3; ch++) {
     const col = ds.cols[leadIndices[ch]]
 
-    // Step 1: Window to 12 seconds and resample to 100 Hz
-    const maxSamples = Math.min(col.length, Math.floor(12 * fs))
+    // Step 1: Window to 10 seconds and resample to 100 Hz (1000 samples)
+    const maxSamples = Math.min(col.length, Math.floor(10 * fs))
     const raw = new Float32Array(maxSamples)
     for (let i = 0; i < maxSamples; i++) raw[i] = col[i]
 
@@ -236,10 +236,10 @@ export function buildHFDetectInput(ds: Dataset, fs: number, leadOverride?: numbe
 
     scalograms.push(resized)
 
-    // Step 6: Copy into tensor (HWC layout: H×W for this channel)
-    const offset = ch * HF_DETECT_OUTPUT_SIZE * HF_DETECT_OUTPUT_SIZE
+    // Keep the same HWC layout as np.stack(lead_scalograms, axis=-1) in the
+    // training notebook. TensorFlow's last dimension is the channel.
     for (let i = 0; i < resized.length; i++) {
-      tensor[offset + i] = resized[i]
+      tensor[i * 3 + ch] = resized[i]
     }
   }
 
@@ -259,13 +259,12 @@ export async function buildHFDetectInputAsync(
   const leadIndices = leadOverride && leadOverride.length === 3 ? leadOverride : findLeads(ds)
   const leadNames = leadIndices.map((i) => ds.names[i] || `Lead ${i + 1}`)
 
-  const scalograms: Float32Array[] = []
   const tensor = new Float32Array(HF_DETECT_OUTPUT_SIZE * HF_DETECT_OUTPUT_SIZE * 3)
+  const scalograms = await Promise.all(leadIndices.map(async (leadIndex, ch) => {
+    const col = ds.cols[leadIndex]
 
-  for (let ch = 0; ch < 3; ch++) {
-    const col = ds.cols[leadIndices[ch]]
-
-    const maxSamples = Math.min(col.length, Math.floor(12 * fs))
+    // Step 1: Window to 10 seconds and resample to 100 Hz (1000 samples)
+    const maxSamples = Math.min(col.length, Math.floor(10 * fs))
     const raw = new Float32Array(maxSamples)
     for (let i = 0; i < maxSamples; i++) raw[i] = col[i]
 
@@ -285,13 +284,14 @@ export async function buildHFDetectInputAsync(
       HF_DETECT_OUTPUT_SIZE,
     )
 
-    scalograms.push(resized)
+    return { ch, resized }
+  }))
 
-    const offset = ch * HF_DETECT_OUTPUT_SIZE * HF_DETECT_OUTPUT_SIZE
+  for (const { ch, resized } of scalograms) {
     for (let i = 0; i < resized.length; i++) {
-      tensor[offset + i] = resized[i]
+      tensor[i * 3 + ch] = resized[i]
     }
   }
 
-  return { tensor, scalograms, leadNames }
+  return { tensor, scalograms: scalograms.map(({ resized }) => resized), leadNames }
 }

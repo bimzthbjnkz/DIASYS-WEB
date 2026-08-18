@@ -35,10 +35,15 @@ def clean_config(obj):
             if k == 'dtype' and isinstance(v, dict) and v.get('class_name') == 'DTypePolicy':
                 out[k] = v['config']['name']
                 continue
+            if k == 'activation' and v == 'silu':
+                out[k] = 'swish'
+                continue
             out[k] = clean_config(v)
         return out
     if isinstance(obj, list):
         return [clean_config(x) for x in obj]
+    if isinstance(obj, str) and obj == 'silu':
+        return 'swish'
     return obj
 
 
