@@ -12,6 +12,7 @@
  */
 
 import { cwtMorl } from './cwtMorl.ts'
+import { cwtMorlWorker } from './cwtWorkerClient.ts'
 import { minmax2d } from './bandpass.ts'
 import type { Dataset } from './ecg.ts'
 
@@ -218,3 +219,44 @@ export function buildEchoNextInput(
 
 /** @deprecated Use buildEchoNextInput instead. */
 export const buildModelInput = buildEchoNextInput
+
+/**
+ * Async version — uses Web Worker CWT to avoid blocking the main thread.
+ * Produces the identical output as buildEchoNextInput.
+ */
+export async function buildEchoNextInputAsync(
+  ds: Dataset,
+  fs: number,
+  _leadIdx: number,
+  onCwtProgress?: (ch: number, done: number, total: number) => void,
+): Promise<ModelInput> {
+  const used = findLeads(ds)
+  const channels: ModelChannel[] = []
+
+  for (let ci = 0; ci < used.length; ci++) {
+    const col = ds.cols[used[ci]]
+    const label = ds.names[used[ci]] || `Lead ${used[ci] + 1}`
+
+    let sig = resample(col, MODEL_FS * 10)
+    sig = downsample(sig, MODEL_DOWNSAMPLE)
+
+    const scal = await cwtMorlWorker(sig, MODEL_SCALES, (done, total) => {
+      onCwtProgress?.(ci, done, total)
+    })
+
+    const scaled = minmax2d(scal)
+    const resized = resizeBilinear2D(scaled, MODEL_SCALES, MODEL_N, MODEL_OUTPUT_SIZE, MODEL_OUTPUT_SIZE)
+    channels.push({ label, mag: resized })
+  }
+
+  const disp = used.indexOf(_leadIdx)
+  const tensor = new Float32Array(MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE * 3)
+  for (let ch = 0; ch < 3; ch++) {
+    const offset = ch * MODEL_OUTPUT_SIZE * MODEL_OUTPUT_SIZE
+    for (let i = 0; i < channels[ch].mag.length; i++) {
+      tensor[offset + i] = channels[ch].mag[i]
+    }
+  }
+
+  return { tensor, channels, displayIdx: disp >= 0 ? disp : 1, usedLeads: used }
+}

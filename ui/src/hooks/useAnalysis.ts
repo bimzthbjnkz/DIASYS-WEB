@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { sleep } from '../lib/format'
+import * as tf from '@tensorflow/tfjs'
 import {
   absPercentile,
   bestLead,
@@ -16,16 +16,17 @@ import type { ReportEntry } from '../lib/report'
 import { captureScalogramThumb } from '../lib/draw'
 import { morlScales } from '../lib/cwtMorl'
 import {
-  buildEchoNextInput,
+  buildEchoNextInputAsync,
   MODEL_FS,
   MODEL_N,
   MODEL_SCALES,
 } from '../lib/modelInput'
 import type { ModelInput } from '../lib/modelInput'
-import { buildHFDetectInput, getAvailableLeadOptions } from '../lib/hfDetectInput'
+import { buildHFDetectInputAsync, getAvailableLeadOptions } from '../lib/hfDetectInput'
 import type { LeadOption as HFLeadOption } from '../lib/hfDetectInput'
-import { computeGradCam, predictEchoNext, predictHFDetect } from '../lib/model'
+import { computeGradCam } from '../lib/model'
 import type { HFDetectResult, EchoNextResult } from '../lib/model'
+import { predictHFDetectWorker, predictEchoNextWorker } from '../lib/inferenceWorkerClient'
 
 interface UseAnalysisParams {
   toast: (msg: string, type?: string) => void
@@ -338,17 +339,21 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     markStep(0, 'done')
     setProgress(8)
 
-    /* ─── Tahap 2: Preprocessing (HF Detection) ─── */
+    /* ─── Tahap 2: Preprocessing (HF Detection) — async CWT in Worker ─── */
     markStep(1, 'active')
     setStage('tahap 2/5 · preprocessing (HF Detection)')
     setProgress(14)
-    await sleep(200)
+    await tf.nextFrame()
 
-    let hfInput: ReturnType<typeof buildHFDetectInput>
+    let hfInput: ReturnType<typeof buildHFDetectInputAsync> extends Promise<infer R> ? R : never
     try {
-      hfInput = buildHFDetectInput(ds, fs, hfLeadsOverride ?? undefined)
+      hfInput = await buildHFDetectInputAsync(ds, fs, hfLeadsOverride ?? undefined, (ch, done, total) => {
+        const base = 14
+        const chFrac = (ch + done / total) / 3
+        setProgress(Math.round(base + chFrac * 8))
+      })
       setProgress(22)
-      await sleep(150)
+      await tf.nextFrame()
       markStep(1, 'done')
     } catch (err) {
       markStep(1, '')
@@ -362,12 +367,13 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     markStep(2, 'active')
     setStage('tahap 3/5 · inferensi HF Detection')
     setProgress(28)
-    await sleep(100)
+    await tf.nextFrame()
 
     let hfResult: HFDetectResult
     try {
       setProgress(35)
-      hfResult = await predictHFDetect(hfInput.tensor)
+      hfResult = await predictHFDetectWorker(hfInput.tensor)
+      await tf.nextFrame()
       markStep(2, 'done')
     } catch (err) {
       markStep(2, '')
@@ -445,19 +451,23 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
         : 0
     setHr(hrVal)
 
-    /* ─── Tahap 4: Preprocessing (EchoNext) ─── */
+    /* ─── Tahap 4: Preprocessing (EchoNext) — async CWT in Worker ─── */
     markStep(3, 'active')
     setStage('tahap 4/5 · preprocessing (EchoNext)')
     setProgress(44)
-    await sleep(120)
+    await tf.nextFrame()
 
     let mi: ModelInput
     try {
-      mi = buildEchoNextInput(ds, fs, lead)
+      mi = await buildEchoNextInputAsync(ds, fs, lead, (ch, done, total) => {
+        const base = 44
+        const chFrac = (ch + done / total) / 3
+        setProgress(Math.round(base + chFrac * 14))
+      })
       modelTensorRef.current = mi.tensor
       setScal(scalFromMorl(mi.channels[mi.displayIdx].mag, MODEL_FS))
       setProgress(58)
-      await sleep(120)
+      await tf.nextFrame()
       markStep(3, 'done')
     } catch (err) {
       markStep(3, '')
@@ -471,12 +481,13 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     markStep(4, 'active')
     setProgress(62)
     setStage('tahap 5/5 · inferensi EchoNext')
-    await sleep(100)
+    await tf.nextFrame()
 
     try {
       setProgress(72)
       setStage('tahap 5/5 · inferensi EchoNext…')
-      const enResult: EchoNextResult = await predictEchoNext(mi.tensor)
+      const enResult: EchoNextResult = await predictEchoNextWorker(mi.tensor)
+      await tf.nextFrame()
       const enProbs: number[] = [enResult.pHFpEF, enResult.pHFrEF]
       const enKlas = enResult.pHFpEF >= 0.5 ? 'HFpEF' : 'HFrEF'
       setKlas(enKlas)

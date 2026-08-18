@@ -75,6 +75,47 @@ export function cwtMorl(sig: Float32Array, nScales = 31): Float32Array {
   return out
 }
 
+/**
+ * Async CWT — yields to the browser every `yieldEvery` scales to prevent UI freeze.
+ * Returns the same magnitude scalogram as the sync version.
+ */
+export async function cwtMorlAsync(
+  sig: Float32Array,
+  nScales = 31,
+  yieldEvery = 4,
+  onProgress?: (done: number, total: number) => void,
+): Promise<Float32Array> {
+  const n = sig.length
+  const filters = buildFilters(nScales)
+  const out = new Float32Array(nScales * n)
+  for (let si = 0; si < nScales; si++) {
+    const f = filters[si]
+    const m = f.length
+    const scaleFactor = -Math.sqrt(si + 1)
+    const coefLen = n + m - 2
+    const d = (m - 2) / 2
+    const lo = Math.floor(d)
+    const hi = coefLen - Math.ceil(d)
+    let oi = 0
+    for (let k = lo; k < hi; k++) {
+      let re = 0
+      const j0 = Math.max(0, k + 1 - (m - 1))
+      const j1 = Math.min(n - 1, k)
+      for (let i = j0; i <= j1; i++) {
+        re += sig[i] * (f[k + 1 - i] - f[k - i])
+      }
+      out[si * n + oi++] = Math.abs(scaleFactor * re)
+    }
+    // Yield to browser periodically so UI stays responsive
+    if (si % yieldEvery === yieldEvery - 1) {
+      onProgress?.(si + 1, nScales)
+      await new Promise<void>((r) => setTimeout(r, 0))
+    }
+  }
+  onProgress?.(nScales, nScales)
+  return out
+}
+
 /** Returns scales array [1, 2, ..., nScales] used by the Morlet CWT. */
 export function morlScales(nScales = 31): number[] {
   return Array.from({ length: nScales }, (_, i) => i + 1)

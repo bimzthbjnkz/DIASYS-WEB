@@ -49,7 +49,7 @@ export function downloadReport(e: ReportEntry): void {
     `  Hasil       : ${isHF ? 'Heart Failure' : 'Non-Heart Failure'}`,
     `  P(HF)       : ${fmtPct(hf.pHF)}`,
     `  P(Non-HF)   : ${fmtPct(hf.pNonHF)}`,
-    `  Model       : HF Detection CNN — 3 blok Conv2D+BN+MaxPool, GAP, sigmoid`,
+    `  Model       : EfficientNetV2B0 — CWT Morlet (31 skala), Z-score, 224×224`,
   ]
 
   if (isHF && e.stage2Klas) {
@@ -63,7 +63,7 @@ export function downloadReport(e: ReportEntry): void {
       `  Konfidensi  : ${fmtPct(e.stage2Conf ?? 0)}`,
       `  P(HFpEF)    : ${fmtPct(e.probs[0])}`,
       `  P(HFrEF)    : ${fmtPct(e.probs[1])}`,
-      `  Model       : EchoNext CNN — 3 blok Conv2D+BN+MaxPool, GAP, sigmoid`,
+      `  Model       : EfficientNetV2B0 — CWT Morlet (48 skala), downsample 2×, 160×160`,
     )
   }
 
@@ -82,8 +82,8 @@ export function downloadReport(e: ReportEntry): void {
     '  PIPELINE',
     '════════════════════════════════════════════',
     '',
-    '  Stage 1 : bandpass 0.5-40 Hz, z-score, CWT Morlet (cmor1.5-1.0), min-max',
-    '  Stage 2 : median filter, clip, z-score, CWT mexh, 3 lead (I, II, V5)',
+    '  Stage 1 : resample 100 Hz, z-score, CWT morl (31 skala), min-max, resize 224×224',
+    '  Stage 2 : downsample 2×, CWT morl (48 skala), min-max, resize 160×160',
     '',
     'CATATAN: Hasil bersifat pendukung keputusan klinis dan harus',
     'dikonfirmasi oleh dokter spesialis jantung beserta ekokardiografi.',

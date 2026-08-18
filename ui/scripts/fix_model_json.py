@@ -3,15 +3,21 @@
 The tfjs Python converter (even 4.x) leaves Keras 3 artifacts in the layer configs
 (DTypePolicy wrappers, module/registered_name, input_axes/output_axes, batch_shape on
 InputLayer) that tfjs-layers rejects. This rewrites model_config in place.
+
+Usage:
+    python fix_model_json.py                         # fix both hfdetect + echonext
+    python fix_model_json.py path/to/model.json      # fix a specific file
 """
 import json
 import os
 import sys
 
-MODEL_JSON = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'public', 'models', 'echonext', 'model.json',
-)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+DEFAULT_TARGETS = [
+    os.path.join(ROOT, 'public', 'models', 'hfdetect', 'model.json'),
+    os.path.join(ROOT, 'public', 'models', 'echonext', 'model.json'),
+]
 
 DROPPED_KEYS = {
     'module', 'registered_name', 'input_axes', 'output_axes', 'optional',
@@ -49,6 +55,23 @@ def fix_input_layers(layers):
             nested_layers = cfg.get('layers', [])
             if nested_layers:
                 fix_input_layers(nested_layers)
+
+
+def fix_top_level_batch_input_shape(mc):
+    """Sync the top-level batchInputShape with the first InputLayer's actual shape.
+
+    Keras 3 sometimes writes a stale batchInputShape at the Functional config level
+    (e.g. [null,224,224,3] when the real input is 160x160). tfjs-layers uses this
+    value, so it must match the InputLayer.
+    """
+    layers = mc.get('config', {}).get('layers', [])
+    for layer in layers:
+        if layer.get('class_name') == 'InputLayer':
+            cfg = layer.get('config', {})
+            shape = cfg.get('batch_input_shape') or cfg.get('batchInputShape')
+            if shape:
+                mc['config']['batchInputShape'] = shape
+            break
 
 
 def fix_inbound_nodes(layers):
@@ -101,6 +124,8 @@ def fix(path: str) -> None:
     # InputLayer: batch_shape -> batch_input_shape (tfjs-layers requirement).
     # Recursively fix all InputLayers including nested Functional sub-models.
     fix_input_layers(layers)
+    # Sync top-level batchInputShape with the first InputLayer's actual shape.
+    fix_top_level_batch_input_shape(mc)
     # Convert Keras 3 inbound_nodes dict format to tfjs-layers array format.
     fix_inbound_nodes(layers)
     for layer in layers:
@@ -119,9 +144,23 @@ def fix(path: str) -> None:
 
 
 def main() -> None:
-    fix(MODEL_JSON)
-    d = json.load(open(MODEL_JSON, encoding='utf-8'))
-    print('input layer:', d['modelTopology']['model_config']['config']['layers'][0]['config'])
+    targets = DEFAULT_TARGETS
+    if len(sys.argv) > 1:
+        targets = [os.path.abspath(a) for a in sys.argv[1:]]
+
+    for path in targets:
+        if not os.path.exists(path):
+            print(f'skipped (not found): {path}')
+            continue
+        fix(path)
+        d = json.load(open(path, encoding='utf-8'))
+        layers = d['modelTopology']['model_config']['config']['layers']
+        for layer in layers:
+            if layer.get('class_name') == 'InputLayer':
+                print(f'  first InputLayer config: {json.dumps(layer["config"], indent=4)}')
+                break
+        top_shape = d['modelTopology']['model_config']['config'].get('batchInputShape')
+        print(f'  top-level batchInputShape: {top_shape}')
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@
 
 import { zscore, minmax2d } from './bandpass.ts'
 import { cwtMorl } from './cwtMorl.ts'
+import { cwtMorlWorker } from './cwtWorkerClient.ts'
 import type { Dataset } from './ecg.ts'
 
 export const HF_DETECT_FS = 100
@@ -236,6 +237,56 @@ export function buildHFDetectInput(ds: Dataset, fs: number, leadOverride?: numbe
     scalograms.push(resized)
 
     // Step 6: Copy into tensor (HWC layout: H×W for this channel)
+    const offset = ch * HF_DETECT_OUTPUT_SIZE * HF_DETECT_OUTPUT_SIZE
+    for (let i = 0; i < resized.length; i++) {
+      tensor[offset + i] = resized[i]
+    }
+  }
+
+  return { tensor, scalograms, leadNames }
+}
+
+/**
+ * Async version — uses Web Worker CWT to avoid blocking the main thread.
+ * Produces the identical output as buildHFDetectInput.
+ */
+export async function buildHFDetectInputAsync(
+  ds: Dataset,
+  fs: number,
+  leadOverride?: number[],
+  onCwtProgress?: (ch: number, done: number, total: number) => void,
+): Promise<HFDetectInput> {
+  const leadIndices = leadOverride && leadOverride.length === 3 ? leadOverride : findLeads(ds)
+  const leadNames = leadIndices.map((i) => ds.names[i] || `Lead ${i + 1}`)
+
+  const scalograms: Float32Array[] = []
+  const tensor = new Float32Array(HF_DETECT_OUTPUT_SIZE * HF_DETECT_OUTPUT_SIZE * 3)
+
+  for (let ch = 0; ch < 3; ch++) {
+    const col = ds.cols[leadIndices[ch]]
+
+    const maxSamples = Math.min(col.length, Math.floor(12 * fs))
+    const raw = new Float32Array(maxSamples)
+    for (let i = 0; i < maxSamples; i++) raw[i] = col[i]
+
+    const resampled = resample(raw, HF_DETECT_FS * 10)
+    const normalized = zscore(resampled)
+
+    const scal = await cwtMorlWorker(normalized, HF_DETECT_SCALES, (done, total) => {
+      onCwtProgress?.(ch, done, total)
+    })
+
+    const scaled = minmax2d(scal)
+    const resized = resizeBilinear2D(
+      scaled,
+      HF_DETECT_SCALES,
+      HF_DETECT_N,
+      HF_DETECT_OUTPUT_SIZE,
+      HF_DETECT_OUTPUT_SIZE,
+    )
+
+    scalograms.push(resized)
+
     const offset = ch * HF_DETECT_OUTPUT_SIZE * HF_DETECT_OUTPUT_SIZE
     for (let i = 0; i < resized.length; i++) {
       tensor[offset + i] = resized[i]
