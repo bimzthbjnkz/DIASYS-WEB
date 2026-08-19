@@ -1,11 +1,10 @@
 import { fmtDate, fmtPct, fmtTime } from './format'
 import { synthECG } from './ecg'
-import type { HFDetectResult } from './model'
 
-export interface InferResult {
-  klas: string
-  conf: number
-  probs: number[]
+interface HFDetectResult {
+  isHF: boolean
+  pHF: number
+  pNonHF: number
 }
 
 export interface ReportEntry {

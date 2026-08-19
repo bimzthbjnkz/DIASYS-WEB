@@ -1,6 +1,4 @@
 import { useCallback, useRef, useState } from 'react'
-import type { JSX } from 'react'
-import { toastIcons } from '../lib/toastIcons'
 
 export interface Toast {
   id: number
@@ -27,6 +25,4 @@ export function useToasts(): { toasts: Toast[]; toast: (msg: string, type?: stri
   return { toasts, toast }
 }
 
-export function toastTypeIcon(type: string): JSX.Element {
-  return toastIcons[type] || toastIcons.info
-}
+

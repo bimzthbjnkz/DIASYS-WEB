@@ -1,7 +1,7 @@
 import { toNum } from './format.ts'
 
 /* ---------------- Sintesis sinyal EKG ---------------- */
-export function gauss(t: number, mu: number, s: number): number {
+function gauss(t: number, mu: number, s: number): number {
   return Math.exp(-((t - mu) * (t - mu)) / (2 * s * s))
 }
 
@@ -46,7 +46,7 @@ export function synthECG(kind: string, seconds = 10, fs = 250): Float32Array {
 }
 
 /* ---------------- Parser file ---------------- */
-export interface ParseResult {
+interface ParseResult {
   cols: Float32Array[]
   names: string[]
 }
@@ -143,7 +143,7 @@ export function absPercentile(x: Float32Array, p: number): number {
   return s[Math.floor(s.length * p)] || 1
 }
 
-export function pickScale(col: Float32Array): number {
+function pickScale(col: Float32Array): number {
   const ap = absPercentile(col, 0.98)
   if (ap > 1000) return 0.001
   if (ap > 60) return 1 / 200
@@ -199,7 +199,7 @@ export function preprocess(sig: Float32Array, fs: number): Float32Array {
   return s
 }
 
-export interface PeakResult {
+interface PeakResult {
   idx: number[]
   flip: boolean
   yy: Float32Array
@@ -229,7 +229,7 @@ export function detectPeaks(y: Float32Array, fs: number): PeakResult {
   return { idx, flip, yy }
 }
 
-export interface MeasureResult {
+interface MeasureResult {
   amp: number
   qrsW: number
   sdnn: number
@@ -259,7 +259,7 @@ export function measure(yy: Float32Array, fs: number, peaks: number[]): MeasureR
   return { amp: amp / Math.max(cnt, 1), qrsW: wSum / Math.max(cnt, 1), sdnn }
 }
 
-/* ---------------- CWT (Morlet) ---------------- */
+/* ---------------- Scalogram display shape ---------------- */
 export interface ScalResult {
   mag: Float32Array
   scales: number[]
@@ -273,60 +273,3 @@ export interface ScalResult {
   mode?: 'morlet' | 'mexh'
 }
 
-export async function cwtScalogram(
-  y: Float32Array,
-  fs: number,
-  onProg: (p: number) => void
-): Promise<ScalResult> {
-  const n = y.length
-  const step = Math.max(2, Math.round(fs / 125))
-  const T = Math.floor(n / step)
-  const ns = 56
-  const a0 = Math.max(1.5, (0.968 * fs) / 121)
-  const ratio = Math.pow(121 / 1.2, 1 / 55)
-  const scales: number[] = []
-  for (let i = 0; i < ns; i++) scales.push(a0 * Math.pow(ratio, i))
-  const mag = new Float32Array(ns * T)
-  const w0 = 6
-  const cnorm = Math.pow(Math.PI, -0.25)
-  const Lmax = Math.round(fs * 0.9)
-  for (let si = 0; si < ns; si++) {
-    const a = scales[si]
-    const L = Math.min(Math.ceil(4 * a), Lmax)
-    const wn = 2 * L + 1
-    const wr = new Float32Array(wn)
-    const wi = new Float32Array(wn)
-    for (let k = -L; k <= L; k++) {
-      const t = k / a
-      const env = (cnorm * Math.exp((-t * t) / 2)) / Math.sqrt(a)
-      wr[k + L] = env * Math.cos(w0 * t)
-      wi[k + L] = env * Math.sin(w0 * t)
-    }
-    for (let bi = 0; bi < T; bi++) {
-      const b = bi * step
-      let re = 0
-      let im = 0
-      const lo = b - L < 0 ? -b : -L
-      const hi = b + L > n - 1 ? n - 1 - b : L
-      for (let k = lo; k <= hi; k++) {
-        const sv = y[b + k]
-        re += sv * wr[k + L]
-        im += sv * wi[k + L]
-      }
-      mag[si * T + bi] = Math.sqrt(re * re + im * im)
-    }
-    if (si % 4 === 0) {
-      onProg(si / ns)
-      await sleep(0)
-    }
-  }
-  onProg(1)
-  const smp = Float32Array.from(mag)
-  smp.sort()
-  const p99 = smp[Math.floor(smp.length * 0.99)] || 1
-  return { mag, scales, T, ns, fs, p99, a0, ratio }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
-}

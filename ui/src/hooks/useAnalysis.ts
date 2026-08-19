@@ -8,24 +8,12 @@ import {
   measure,
   parseDelimited,
   preprocess,
-  synthECG,
 } from '../lib/ecg'
-import type { Dataset, MeasureResult, PeakResult, ScalResult } from '../lib/ecg'
+import type { Dataset, ScalResult } from '../lib/ecg'
+import { synthECG } from '../lib/ecg'
 import type { ReportEntry } from '../lib/report'
 import { captureScalogramThumb } from '../lib/draw'
-import { morlScales } from '../lib/cwtMorl'
-import {
-  buildEchoNextInputAsync,
-  MODEL_FS,
-  MODEL_N,
-  MODEL_SCALES,
-  MODEL_DOWNSAMPLE,
-} from '../lib/modelInput'
-import type { ModelInput } from '../lib/modelInput'
-import { buildHFDetectInputAsync, HF_DETECT_FS, HF_DETECT_N, HF_DETECT_SCALES } from '../lib/hfDetectInput'
-import { computeGradCam } from '../lib/model'
-import type { HFDetectResult, EchoNextResult } from '../lib/model'
-import { predictHFDetectWorker, predictEchoNextWorker } from '../lib/inferenceWorkerClient'
+import { inferECG } from '../lib/inferenceWorkerClient'
 
 interface UseAnalysisParams {
   toast: (msg: string, type?: string) => void
@@ -65,14 +53,7 @@ export interface UseAnalysisReturn {
   unitNote: string
   leadOptions: LeadOption[]
   scalCanvasRef: React.RefObject<HTMLCanvasElement | null>
-  finishDataset: (
-    name: string,
-    cols: Float32Array[],
-    names: string[],
-    defaultFs: number,
-    note: string,
-    kind?: string
-  ) => void
+  finishDataset: (name: string, cols: Float32Array[], names: string[], defaultFs: number, note: string, kind?: string) => void
   loadFile: (file: File) => Promise<void>
   loadSample: (kind: string) => void
   clearData: () => void
@@ -80,29 +61,11 @@ export interface UseAnalysisReturn {
   markStep: (i: number, st: string) => void
 }
 
-function scalFromMorl(mag: Float32Array, fs: number, ns: number, T: number): ScalResult {
-  const smp = Float32Array.from(mag)
-  smp.sort()
-  const p99 = smp[Math.floor(smp.length * 0.99)] || 1
-  return {
-    mag,
-    scales: morlScales(ns),
-    T,
-    ns,
-    fs,
-    p99,
-    a0: 1,
-    ratio: 1,
-    mode: 'morlet',
-  }
-}
-
 export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalysisReturn {
   const [dataset, setDataset] = useState<Dataset | null>(null)
   const [fs, setFs] = useState(250)
   const [lead, setLead] = useState(0)
   const [running, setRunning] = useState(false)
-
   const [raw, setRaw] = useState<Float32Array | null>(null)
   const [pre, setPre] = useState<Float32Array | null>(null)
   const [fsUsed, setFsUsed] = useState(250)
@@ -115,14 +78,10 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
   const [lastEntry, setLastEntry] = useState<ReportEntry | null>(null)
   const [colormap, setColormap] = useState('inferno')
   const [gradcam, setGradcam] = useState(false)
-
   const [steps, setSteps] = useState<string[]>(['', '', '', '', ''])
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('siap · menunggu data')
   const scalCanvasRef = useRef<HTMLCanvasElement | null>(null)
-  const runRef = useRef(false)
-  const seqRef = useRef(5013)
-  const modelTensorRef = useRef<Float32Array | null>(null)
   const runningRef = useRef(false)
 
   const markStep = useCallback((i: number, st: string) => {
@@ -133,128 +92,66 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     })
   }, [])
 
-  const resetRunUI = useCallback(
-    (keepDone: boolean, hasData = !!dataset) => {
-      setSteps((prev) => {
-        const next = [...prev]
-        for (let i = 1; i < 5; i++) next[i] = ''
-        if (!keepDone) next[0] = hasData ? 'done' : ''
-        return next
-      })
-      setProgress(hasData ? 8 : 0)
-      setScal(null)
-      setCam(null)
-      modelTensorRef.current = null
-      setKlas(null)
-      setPeaksIdx([])
-      setPeaksTime([])
-      setStage(hasData ? 'data siap · klik Jalankan Analisis' : 'siap · menunggu data')
-    },
-    [dataset],
-  )
-
   const unitNote = useMemo(() => {
     if (!dataset) return 'mV'
-    const col = dataset.cols[lead]
-    const ap = absPercentile(col, 0.98)
+    const ap = absPercentile(dataset.cols[lead], 0.98)
     if (ap > 1000) return 'µV → mV (×0,001)'
     if (ap > 60) return 'ADC gain 200 → mV'
     return 'mV (langsung)'
   }, [dataset, lead])
 
-  const leadOptions = useMemo(() => {
-    if (!dataset) return []
-    return dataset.cols.map((c, i) => ({
-      i,
-      label: `${dataset.names[i]} · ${(c.length / 1000).toFixed(1)}k sampel`,
-    }))
-  }, [dataset])
+  const leadOptions = useMemo(() => dataset
+    ? dataset.cols.map((c, i) => ({ i, label: `${dataset.names[i]} · ${(c.length / 1000).toFixed(1)}k sampel` }))
+    : [], [dataset])
 
-  const finishDataset = useCallback(
-    (
-      name: string,
-      cols: Float32Array[],
-      names: string[],
-      defaultFs: number,
-      note: string,
-      kind = 'upload'
-    ) => {
-      const ds: Dataset = { name, cols, names, kind, note }
-      setDataset(ds)
-      setFs(defaultFs)
-      const ls = cols.length > 1 ? bestLead(cols) : 0
-      setLead(ls)
-      markStep(0, 'done')
-      setProgress(8)
-      setStage('data siap · tahap 1 selesai')
-      setRunning(false)
-      resetRunUI(false, true)
-      toast('File berhasil dimuat — siap untuk analisis AI otomatis.', 'success')
-    },
-    [markStep, resetRunUI, toast],
-  )
+  const finishDataset = useCallback((name: string, cols: Float32Array[], names: string[], defaultFs: number, note: string, kind = 'upload') => {
+    setDataset({ name, cols, names, kind, note })
+    setFs(defaultFs)
+    setLead(cols.length > 1 ? bestLead(cols) : 0)
+    setSteps(['done', '', '', '', ''])
+    setProgress(8)
+    setStage('data siap · halaman UI aktif')
+    setRunning(false)
+    toast('File berhasil dimuat. Sistem ML telah dinonaktifkan; data hanya ditampilkan sebagai UI.', 'info')
+  }, [toast])
 
-  const loadFile = useCallback(
-    async (file: File) => {
-      const name = file.name
-      const lower = name.toLowerCase()
-      toast(`Membaca file "${name}"…`, 'info')
-      try {
-        if (lower.endsWith('.dat')) {
-          const buf = await file.arrayBuffer()
-          const head = new TextDecoder('utf-8').decode(buf.slice(0, 600))
-          let printable = 0
-          for (const ch of head) {
-            const c = ch.charCodeAt(0)
-            if (c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127)) printable++
-          }
-          if (printable / Math.max(head.length, 1) > 0.9) {
-            const p = parseDelimited(new TextDecoder('utf-8').decode(buf))
-            if (p) return finishDataset(name, p.cols, p.names, 250, 'data teks')
-          }
-          if (buf.byteLength % 3 === 0 && buf.byteLength >= 300) {
-            const [ch0, ch1] = decode212(buf)
-            return finishDataset(name, [ch0, ch1], ['Lead I', 'Lead II'], 360, 'MIT-BIH format 212 · gain≈200 ADC/mV')
-          }
-          toast('Format .dat tidak dikenali (bukan 212 / teks).', 'warn')
-          return
+  const loadFile = useCallback(async (file: File) => {
+    toast(`Membaca file "${file.name}"…`, 'info')
+    try {
+      const lower = file.name.toLowerCase()
+      if (lower.endsWith('.dat')) {
+        const buf = await file.arrayBuffer()
+        const head = new TextDecoder().decode(buf.slice(0, 600))
+        const printable = [...head].filter((ch) => {
+          const c = ch.charCodeAt(0)
+          return c === 9 || c === 10 || c === 13 || (c >= 32 && c < 127)
+        }).length
+        if (printable / Math.max(head.length, 1) > 0.9) {
+          const p = parseDelimited(new TextDecoder().decode(buf))
+          if (p) return finishDataset(file.name, p.cols, p.names, 250, 'data teks')
         }
-        const text = await file.text()
-        const p = parseDelimited(text)
-        if (!p) {
-          toast('Tidak ditemukan data numerik pada file.', 'warn')
-          return
+        if (buf.byteLength % 3 === 0 && buf.byteLength >= 300) {
+          const [ch0, ch1] = decode212(buf)
+          return finishDataset(file.name, [ch0, ch1], ['Lead I', 'Lead II'], 360, 'MIT-BIH format 212')
         }
-        finishDataset(name, p.cols, p.names, 250, 'delimiter & header otomatis')
-      } catch (err) {
-        toast('Gagal membaca file: ' + (err instanceof Error ? err.message : String(err)), 'warn')
+        toast('Format .dat tidak dikenali.', 'warn')
+        return
       }
-    },
-    [finishDataset, toast],
-  )
+      const p = parseDelimited(await file.text())
+      if (!p) return toast('Tidak ditemukan data numerik pada file.', 'warn')
+      finishDataset(file.name, p.cols, p.names, 250, 'delimiter & header otomatis')
+    } catch (err) {
+      toast('Gagal membaca file: ' + (err instanceof Error ? err.message : String(err)), 'warn')
+    }
+  }, [finishDataset, toast])
 
-  const loadSample = useCallback(
-    (kind: string) => {
-      if (runningRef.current) return toast('Tunggu analisis selesai.', 'warn')
-      const sig = synthECG(kind)
-      setDataset({
-        name: kind === 'hfpEF' ? 'Contoh — Simulasi HFpEF' : 'Contoh — Simulasi HFrEF',
-        cols: [sig],
-        names: ['Lead II'],
-        kind,
-        note: 'data contoh tersintesis',
-      })
-      setFs(250)
-      setLead(0)
-      markStep(0, 'done')
-      setProgress(8)
-      setStage('data siap · tahap 1 selesai')
-      setRunning(false)
-      resetRunUI(false, true)
-      toast('Data contoh dimuat. Klik "Jalankan Analisis".', 'success')
-    },
-    [markStep, resetRunUI, runningRef, toast],
-  )
+  const loadSample = useCallback((kind: string) => {
+    if (runningRef.current) return
+    finishDataset(
+      kind === 'hfpEF' ? 'Contoh — Simulasi HFpEF' : 'Contoh — Simulasi HFrEF',
+      [synthECG(kind)], ['Lead II'], 250, 'data contoh tersintesis', kind,
+    )
+  }, [finishDataset])
 
   const clearData = useCallback(() => {
     setDataset(null)
@@ -262,312 +159,95 @@ export function useAnalysis({ toast, onNewEntry }: UseAnalysisParams): UseAnalys
     setPre(null)
     setScal(null)
     setCam(null)
-    modelTensorRef.current = null
     setKlas(null)
+    setLastEntry(null)
     setPeaksIdx([])
     setPeaksTime([])
+    setHr(0)
     setSteps(['', '', '', '', ''])
     setProgress(0)
     setStage('siap · menunggu data')
-    setRunning(false)
   }, [])
 
-  const staleResults = useCallback(() => {
+  const setLeadSafe = useCallback((value: number) => {
+    setLead(value)
+    setRaw(null)
+    setPre(null)
     setScal(null)
     setCam(null)
-    modelTensorRef.current = null
     setKlas(null)
   }, [])
 
-  const setLeadSafe = useCallback(
-    (l: number) => {
-      setLead(l)
-      staleResults()
-    },
-    [staleResults],
-  )
-
-  const setFsSafe = useCallback(
-    (f: number) => {
-      setFs(f)
-      staleResults()
-    },
-    [staleResults],
-  )
-
-  const setGradcamSafe = useCallback(
-    (g: boolean) => {
-      setGradcam(g)
-      if (g && modelTensorRef.current) {
-        computeGradCam(modelTensorRef.current)
-          .then(setCam)
-          .catch(() => setCam(null))
-      } else if (!g) {
-        setCam(null)
-      }
-    },
-    [],
-  )
-
-  /* ================================================================= */
-  /*  Cascaded 2-stage analysis pipeline                                 */
-  /* ================================================================= */
-
   const runAnalysis = useCallback(async () => {
     if (runningRef.current) return
-    if (!dataset) {
-      toast('Unggah atau muat data EKG terlebih dahulu.', 'warn')
-      return
-    }
-    runRef.current = true
+    if (!dataset) return toast('Unggah atau muat data EKG terlebih dahulu.', 'warn')
     runningRef.current = true
     setRunning(true)
-    resetRunUI(false)
-
     try {
-      const ds = dataset
-
-      /* ─── Tahap 1: Upload/Data ─── */
-      markStep(0, 'done')
-      setProgress(8)
-
-      /* ─── Tahap 2: Preprocessing (HF Detection) — async CWT in Worker ─── */
-      markStep(1, 'active')
-      setStage('tahap 2/5 · preprocessing (HF Detection)')
-      setProgress(14)
-
-      let hfInput: ReturnType<typeof buildHFDetectInputAsync> extends Promise<infer R> ? R : never
-      try {
-        hfInput = await buildHFDetectInputAsync(ds, fs, undefined, (ch, done, total) => {
-          const base = 14
-          const chFrac = (ch + done / total) / 3
-          setProgress(Math.round(base + chFrac * 8))
-        })
-        // Show stage 1 CWT immediately. HF cases replace it with EchoNext
-        // after stage 2 preprocessing completes.
-        setScal(scalFromMorl(hfInput.scalograms[0], HF_DETECT_FS, HF_DETECT_SCALES, HF_DETECT_N))
-        setProgress(22)
-        markStep(1, 'done')
-      } catch (err) {
-        markStep(1, '')
-        setProgress(8)
-        setStage('gagal · preprocessing HF Detection')
-        toast('Gagal preprocessing HF Detection: ' + (err instanceof Error ? err.message : String(err)), 'warn')
-        return
+      const { raw: signal, fs: signalFs } = getSignal(dataset, fs, lead)
+      const filtered = preprocess(signal, signalFs)
+      const peaks = detectPeaks(filtered, signalFs)
+      const stats = measure(peaks.yy, signalFs, peaks.idx)
+      const heartRate = peaks.idx.length > 1
+        ? Math.round((60 * (peaks.idx.length - 1)) / ((peaks.idx[peaks.idx.length - 1] - peaks.idx[0]) / signalFs))
+        : 0
+      setRaw(signal)
+      setFsUsed(signalFs)
+      setPre(filtered)
+      setPeaksIdx(peaks.idx)
+      setPeaksTime(peaks.idx.map((i) => i / signalFs))
+      setHr(heartRate)
+      setCam(null)
+      setSteps(['done', 'active', '', '', ''])
+      setStage('tahap 2/5 · preprocessing & inferensi HF Detection')
+      const result = await inferECG(dataset.cols, dataset.names, fs, (value, nextStage) => {
+        setProgress(value)
+        setStage(nextStage)
+        if (value >= 60) setSteps(['done', 'done', 'active', '', ''])
+        if (value >= 82) setSteps(['done', 'done', 'done', 'done', 'active'])
+      })
+      setScal(result.scalogram)
+      const hf = { isHF: result.hfProbability >= 0.5, pHF: result.hfProbability, pNonHF: 1 - result.hfProbability }
+      const isHF = hf.isHF
+      const stage2Klas = isHF ? (result.stage2Probability! >= 0.5 ? 'HFpEF' : 'HFrEF') : null
+      const stage2Conf = isHF ? Math.max(result.stage2Probability!, 1 - result.stage2Probability!) : null
+      const klas = stage2Klas ?? (isHF ? 'Heart Failure' : 'Non-HF')
+      setKlas(klas)
+      const probabilities = isHF
+        ? [result.stage2Probability!, 1 - result.stage2Probability!]
+        : [hf.pNonHF, hf.pHF]
+      const entry: ReportEntry = {
+        id: 'CW-' + Date.now().toString(36).toUpperCase(),
+        ts: Date.now(),
+        src: dataset.name,
+        klas,
+        conf: isHF ? stage2Conf! : Math.max(hf.pHF, hf.pNonHF),
+        probs: probabilities,
+        stats: { hr: heartRate, amp: stats.amp, qrsW: stats.qrsW, sdnn: stats.sdnn },
+        thumb: captureScalogramThumb(result.scalogram, filtered, peaks.idx.map((i) => i / signalFs), klas),
+        hfDetectResult: hf,
+        stage2Klas,
+        stage2Conf,
       }
-
-      /* ─── Tahap 3: Inferensi HF Detection ─── */
-      markStep(2, 'active')
-      setStage('tahap 3/5 · inferensi HF Detection')
-      setProgress(28)
-
-      let hfResult: HFDetectResult
-      try {
-        setProgress(35)
-        hfResult = await predictHFDetectWorker(hfInput.tensor)
-        markStep(2, 'done')
-      } catch (err) {
-        markStep(2, '')
-        setProgress(22)
-        setStage('gagal · model HF Detection tidak dapat dipanggil')
-        toast('Gagal menjalankan model HF Detection: ' + (err instanceof Error ? err.message : String(err)), 'warn')
-        return
-      }
-
-      /* ─── Cek hasil Stage 1 ─── */
-      if (!hfResult.isHF) {
-        // Non-HF → selesai, tidak perlu Stage 2
-        const entry: ReportEntry = {
-          id: 'CW-' + seqRef.current++,
-          ts: Date.now(),
-          src: ds.name,
-          klas: 'Non-HF',
-          conf: hfResult.pNonHF,
-          probs: [hfResult.pNonHF, hfResult.pHF],
-          stats: { hr: 0, amp: 0, qrsW: 0, sdnn: 0 },
-          thumb: null,
-          hfDetectResult: hfResult,
-          stage2Klas: null,
-          stage2Conf: null,
-        }
-        setLastEntry(entry)
-        onNewEntry?.(entry)
-        setKlas('Non-HF')
-        setProgress(100)
-        setStage('selesai · Non-HF (' + (hfResult.pNonHF * 100).toFixed(1).replace('.', ',') + '%)')
-        markStep(3, 'done')
-        markStep(4, 'skip')
-        toast('Analisis selesai — Non-HF terdeteksi.', 'success')
-
-        // Still compute some basic stats from raw signal for display
-        const { raw: rawSig, fs: rfs } = getSignal(ds, fs, 0)
-        setRaw(rawSig)
-        setFsUsed(rfs)
-        const y = preprocess(rawSig, rfs)
-        setPre(y)
-        const det: PeakResult = detectPeaks(y, rfs)
-        setPeaksIdx(det.idx)
-        setPeaksTime(det.idx.map((i) => i / rfs))
-        const m: MeasureResult = measure(det.yy, rfs, det.idx)
-        const hrVal =
-          det.idx.length > 1
-            ? Math.round((60 * (det.idx.length - 1)) / ((det.idx[det.idx.length - 1] - det.idx[0]) / rfs))
-            : 0
-        setHr(hrVal)
-
-        // Update the entry with stats
-        entry.stats = { hr: hrVal, amp: m.amp, qrsW: m.qrsW, sdnn: m.sdnn }
-
-        return
-      }
-
-      /* ─── HF terdeteksi → lanjut ke Stage 2 (EchoNext) ─── */
-
-      // Get signal for display
-      const { raw: rawSig, fs: rfs } = getSignal(ds, fs, lead)
-      setRaw(rawSig)
-      setFsUsed(rfs)
-
-      // Preprocess for display
-      const y = preprocess(rawSig, rfs)
-      const det: PeakResult = detectPeaks(y, rfs)
-      const peaks = det.idx
-      setPeaksIdx(peaks)
-      setPeaksTime(peaks.map((i) => i / rfs))
-      setPre(y)
-      const m: MeasureResult = measure(det.yy, rfs, peaks)
-      const hrVal =
-        peaks.length > 1
-          ? Math.round((60 * (peaks.length - 1)) / ((peaks[peaks.length - 1] - peaks[0]) / rfs))
-          : 0
-      setHr(hrVal)
-
-      /* ─── Tahap 4: Preprocessing (EchoNext) — async CWT in Worker ─── */
-      markStep(3, 'active')
-      setStage('tahap 4/5 · preprocessing (EchoNext)')
-      setProgress(44)
-
-      let mi: ModelInput
-      try {
-        mi = await buildEchoNextInputAsync(ds, fs, lead, (ch, done, total) => {
-          const base = 44
-          const chFrac = (ch + done / total) / 3
-          setProgress(Math.round(base + chFrac * 14))
-        })
-        modelTensorRef.current = mi.tensor
-        setScal(scalFromMorl(mi.channels[mi.displayIdx].mag, MODEL_FS / MODEL_DOWNSAMPLE, MODEL_SCALES, MODEL_N))
-        setProgress(58)
-        markStep(3, 'done')
-      } catch (err) {
-        markStep(3, '')
-        setProgress(35)
-        setStage('gagal · preprocessing EchoNext')
-        toast('Gagal preprocessing EchoNext: ' + (err instanceof Error ? err.message : String(err)), 'warn')
-        return
-      }
-
-      /* ─── Tahap 5: Inferensi EchoNext ─── */
-      markStep(4, 'active')
-      setProgress(62)
-      setStage('tahap 5/5 · inferensi EchoNext')
-
-      try {
-        setProgress(72)
-        setStage('tahap 5/5 · inferensi EchoNext…')
-        const enResult: EchoNextResult = await predictEchoNextWorker(mi.tensor)
-        const enProbs: number[] = [enResult.pHFpEF, enResult.pHFrEF]
-        const enKlas = enResult.pHFpEF >= 0.5 ? 'HFpEF' : 'HFrEF'
-        setKlas(enKlas)
-
-        if (gradcam) {
-          setStage('tahap 5/5 · menghitung Grad-CAM…')
-          computeGradCam(mi.tensor)
-            .then(setCam)
-            .catch(() => setCam(null))
-        }
-
-        const thumb = captureScalogramThumb(
-          scalFromMorl(mi.channels[mi.displayIdx].mag, MODEL_FS / MODEL_DOWNSAMPLE, MODEL_SCALES, MODEL_N),
-          y,
-          peaks.map((i) => i / rfs),
-          enKlas,
-        )
-
-        const entry: ReportEntry = {
-          id: 'CW-' + seqRef.current++,
-          ts: Date.now(),
-          src: ds.name,
-          klas: enKlas,
-          conf: Math.max(enProbs[0], enProbs[1]),
-          probs: enProbs,
-          stats: { hr: hrVal, amp: m.amp, qrsW: m.qrsW, sdnn: m.sdnn },
-          thumb,
-          hfDetectResult: hfResult,
-          stage2Klas: enKlas,
-          stage2Conf: Math.max(enProbs[0], enProbs[1]),
-        }
-        setLastEntry(entry)
-        onNewEntry?.(entry)
-        setProgress(100)
-        setStage(
-          'selesai · HF → ' +
-            enKlas +
-            ' (' +
-            (Math.max(enProbs[0], enProbs[1]) * 100).toFixed(1).replace('.', ',') +
-            '%)',
-        )
-        markStep(4, 'done')
-        toast(
-          `Analisis selesai — HF terdeteksi → ${enKlas} (${(Math.max(enProbs[0], enProbs[1]) * 100).toFixed(1).replace('.', ',')}%)`,
-          'success',
-        )
-      } catch (err) {
-        setKlas(null)
-        markStep(4, '')
-        setProgress(58)
-        setStage('gagal · model EchoNext tidak dapat dipanggil')
-        toast('Gagal menjalankan model EchoNext: ' + (err instanceof Error ? err.message : String(err)), 'warn')
-      }
+      setLastEntry(entry)
+      onNewEntry?.(entry)
+      setProgress(100)
+      setSteps(isHF ? ['done', 'done', 'done', 'done', 'done'] : ['done', 'done', 'done', 'skip', 'skip'])
+      setStage(isHF ? `selesai · HF → ${stage2Klas}` : `selesai · Non-HF (${(hf.pNonHF * 100).toFixed(1)}%)`)
+      toast(`Analisis selesai — ${klas}.`, 'success')
+    } catch (error) {
+      setStage('gagal · inferensi tidak dapat diselesaikan')
+      toast('Gagal menjalankan analisis: ' + (error instanceof Error ? error.message : String(error)), 'warn')
     } finally {
-      runRef.current = false
-      runningRef.current = false
       setRunning(false)
+      runningRef.current = false
     }
-  }, [dataset, fs, lead, gradcam, markStep, onNewEntry, resetRunUI, runningRef, toast])
+  }, [dataset, fs, lead, onNewEntry, toast])
 
   return {
-    toast,
-    dataset,
-    fs,
-    setFs: setFsSafe,
-    lead,
-    setLead: setLeadSafe,
-    running,
-    raw,
-    pre,
-    fsUsed,
-    hr,
-    peaksIdx,
-    peaksTime,
-    scal,
-    cam,
-    klas,
-    lastEntry,
-    colormap,
-    setColormap,
-    gradcam,
-    setGradcam: setGradcamSafe,
-    steps,
-    progress,
-    stage,
-    unitNote,
-    leadOptions,
-    scalCanvasRef,
-    finishDataset,
-    loadFile,
-    loadSample,
-    clearData,
-    runAnalysis,
-    markStep,
+    toast, dataset, fs, setFs, lead, setLead: setLeadSafe, running, raw, pre, fsUsed, hr,
+    peaksIdx, peaksTime, scal, cam, klas, lastEntry, colormap, setColormap,
+    gradcam, setGradcam: () => setGradcam(false), steps, progress, stage, unitNote, leadOptions,
+    scalCanvasRef, finishDataset, loadFile, loadSample, clearData, runAnalysis, markStep,
   }
 }

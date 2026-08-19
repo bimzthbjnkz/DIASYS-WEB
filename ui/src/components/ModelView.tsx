@@ -63,7 +63,7 @@ export default function ModelView() {
         <h1 className="mt-3 font-display text-[clamp(1.8rem,4vw,2.6rem)] tracking-[-.4px]">Model &amp; Pipeline</h1>
         <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-[#54655D]">
           Sistem cascaded 2-stage — <b className="font-semibold text-[#0E1F19]">HF Detection</b> mendeteksi keberadaan Heart Failure, lalu{' '}
-          <b className="font-semibold text-[#0E1F19]">EchoNext EfficientNetV2B0</b> mengklasifikasikan HFpEF vs HFrEF. Keduanya dijalankan di browser via TensorFlow.js.
+          <b className="font-semibold text-[#0E1F19]">EchoNext EfficientNetV2B0</b> untuk inferensi client-side di dalam Web Worker.
         </p>
       </div>
 

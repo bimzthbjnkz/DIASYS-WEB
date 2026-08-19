@@ -214,7 +214,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
       const ln = log(steps[i][0]); if (ln) ln.classList.add('cur')
       await sleep(steps[i][2])
       if (ln) ln.classList.remove('cur')
-      if (steps[i][1]) steps[i][1]()
+      if (steps[i][1]) steps[i][1]!()
       if (runProgRef.current) runProgRef.current.style.width = ((i + 1) / steps.length * 100) + '%'
     }
     const vt = $('#verdictTitle'), vd = $('#verdictDesc'), vn = $('#valNon'), vh = $('#valHfref'), vp = $('#valHfpef'), ps1 = $('#pStage1'), ps1b = $('#pStage1b')

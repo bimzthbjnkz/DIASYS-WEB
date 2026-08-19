@@ -1,4 +1,4 @@
-export const MAPS: Record<string, number[][]> = {
+const MAPS: Record<string, number[][]> = {
   inferno: [
     [0, 1, 0, 4],
     [0.12, 26, 11, 64],

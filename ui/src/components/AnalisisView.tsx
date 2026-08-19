@@ -153,10 +153,10 @@ function UploadCard({ a }: UploadCardProps) {
             </div>
           </div>
 
-          <button className="btn btn-primary w-full" onClick={a.runAnalysis} disabled={a.running}>
-            <PlayIcon className="h-4 w-4" />
-            {a.running ? 'Memproses Inferensi Otomatis…' : a.lastEntry ? 'Jalankan Ulang Analisis' : 'Jalankan Analisis AI'}
-          </button>
+           <button className="btn btn-primary w-full" onClick={a.runAnalysis} disabled={a.running}>
+             <PlayIcon className="h-4 w-4" />
+             {a.running ? 'Memproses Inferensi...' : a.lastEntry ? 'Jalankan Ulang Analisis' : 'Jalankan Analisis AI'}
+           </button>
         </div>
       )}
     </Card>
@@ -215,11 +215,11 @@ function ScalogramSection({ a }: ScalogramSectionProps) {
           </select>
         </label>
         <label className="switch">
-          <input type="checkbox" checked={a.gradcam} onChange={(e) => a.setGradcam(e.target.checked)} />
+           <input type="checkbox" checked={a.gradcam} disabled />
           <span className="tr" />
         </label>
         <label className="flex cursor-pointer items-center gap-2 text-[12.5px] font-semibold text-[#54655D]">
-          Overlay Grad-CAM
+           Overlay Grad-CAM (segera hadir)
         </label>
       </div>
       {a.scal && (
@@ -310,9 +310,9 @@ export default function AnalisisView({ a, stats }: AnalisisViewProps) {
         <span className="kicker reveal in" style={{ '--d': '0s' } as React.CSSProperties}>04 · Analisis EKG</span>
         <h1 className="mt-3 font-display text-[clamp(1.8rem,4vw,2.6rem)] tracking-[-.4px]">Analisis EKG</h1>
         <p className="mt-1.5 max-w-[720px] text-[13.5px] leading-[1.6] text-[#54655D]">
-          Unggah rekaman EKG 12 lead — sistem menjalankan{' '}
-          <b className="font-semibold text-[#0E1F19]">HF Detection</b> terlebih dahulu untuk mendeteksi keberadaan Heart Failure, lalu jika terdeteksi HF, sistem menjalankan{' '}
-          <b className="font-semibold text-[#0E1F19]">EchoNext CNN</b> untuk membedakan HFpEF dan HFrEF.
+           Unggah rekaman EKG 12 lead untuk menampilkan sinyal dan pengukuran dasar. Fitur inferensi{' '}
+           <b className="font-semibold text-[#0E1F19]">HF Detection</b> dan{' '}
+           <b className="font-semibold text-[#0E1F19]">EchoNext CNN</b> hanya ditampilkan sebagai rancangan UI dan tidak dijalankan.
         </p>
       </div>
 
